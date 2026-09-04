@@ -108,14 +108,14 @@ export function Dashboard() {
         if (selectedSlots.length === 0 || !user || !selectedRoom) return;
         setLoading(true);
         try {
-            if (user.role !== 'admin') {
+            const isDailyUser = user.id.toLowerCase() === 'daily' || user.id === '데일리' || user.name?.includes('데일리');
+            if (user.role !== 'admin' && !isDailyUser) {
                 const pendingReports = await dataService.getPendingActivityReports(user.id);
                 if (pendingReports.length > 0) {
                     alert('미작성 활동일지가 있습니다. 활동일지를 먼저 제출한 뒤 새 예약을 진행해주세요.');
                     return;
                 }
             }
-            const isDailyUser = user.id.toLowerCase() === 'daily' || user.id === '데일리' || user.name?.includes('데일리');
             if (isDailyUser && !userPhoneNumber) { setIsPhoneModalOpen(true); return; }
             setPendingPhoneNumber(isDailyUser ? userPhoneNumber : undefined);
             setIsHeadcountModalOpen(true);
@@ -146,7 +146,8 @@ export function Dashboard() {
                 phoneNumber: pendingPhoneNumber,
                 expectedHeadcount,
             });
-            alert('예약이 완료되었습니다. 활동 종료 후 다음 로그인 시 활동일지를 작성해주세요.');
+            const isDailyUser = user.id.toLowerCase() === 'daily' || user.id === '데일리' || user.name?.includes('데일리');
+            alert(isDailyUser ? '예약이 완료되었습니다.' : '예약이 완료되었습니다. 활동 종료 후 다음 로그인 시 활동일지를 작성해주세요.');
             setIsHeadcountModalOpen(false);
             setSelectedSlots([]);
             loadBookings();

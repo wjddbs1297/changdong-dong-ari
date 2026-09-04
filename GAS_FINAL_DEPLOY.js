@@ -57,10 +57,15 @@ function publicUser(record) {
     return { id: String(record.row[0]), name: String(record.row[1]), status: record.row[2] || "Active", role: record.row[3] || "user" };
 }
 
+function isDailyUserId(userId) {
+    var id = String(userId || "").trim().toLowerCase();
+    return id === "daily" || id === "데일리";
+}
+
 function isPinExemptRecord(record) {
     var id = String(record.row[0] || "").trim().toLowerCase();
     var role = String(record.row[3] || "user").trim().toLowerCase();
-    return role !== "admin" && (id === "daily" || id === "데일리");
+    return role !== "admin" && isDailyUserId(id);
 }
 
 function createSession(record) {
@@ -437,13 +442,14 @@ function createBooking(params) {
         var user = config.users.find(function (u) { return u.id.toLowerCase() === userId.toLowerCase(); });
         var userName = user ? user.name : userId;
         var isAdmin = user && user.role === 'admin';
+        var isDaily = isDailyUserId(userId);
 
         // 2. 3시간 제한 체크 (Admin 제외)
         var data = sheet.getDataRange().getValues();
         var totalHours = 0;
 
         if (!isAdmin) {
-            if (collectPendingActivityReports(userId, sheet).length > 0) {
+            if (!isDaily && collectPendingActivityReports(userId, sheet).length > 0) {
                 return sendResponse({ message: "미작성 활동일지가 있습니다. 활동일지를 먼저 제출한 뒤 새 예약을 진행해주세요." }, false);
             }
 
@@ -505,7 +511,7 @@ function createBooking(params) {
             "",                         // T 활동 후 작성
             "",                         // U 대표자 서명은 활동 후 작성
             expectedHeadcount,           // V 예정 활동인원
-            "Pending",                  // W 활동일지 상태
+            isDaily ? "NotRequired" : "Pending", // W 데일리는 수기 작성, 동아리는 활동 후 작성
             "",                         // X 제출일시
             ""                          // Y 최종 작성자
         ]);
@@ -689,6 +695,7 @@ function getMembers(params) {
 function getPendingActivityReports(params) {
     var userId = String(params.userId || "").trim();
     if (!userId) return sendResponse({ message: "사용자 ID가 필요합니다." }, false);
+    if (isDailyUserId(userId)) return sendResponse([]);
 
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     var sheet = ss.getSheetByName("예약내역");
@@ -699,6 +706,7 @@ function getPendingActivityReports(params) {
 
 // 엑셀로 추가한 정기대관도 오늘 이후 예약이면 예약 ID와 Pending 상태를 자동 보완합니다.
 function collectPendingActivityReports(userId, sheet) {
+    if (isDailyUserId(userId)) return [];
     var data = sheet.getDataRange().getValues();
     var nowKey = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm");
     var pending = [];

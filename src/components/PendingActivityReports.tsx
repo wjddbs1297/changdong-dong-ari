@@ -31,7 +31,8 @@ export function PendingActivityReports() {
     const drawing = useRef(false);
 
     const load = useCallback(async () => {
-        if (!user || user.role === 'admin') return;
+        const isDailyUser = !!user && ['daily', '데일리'].includes(user.id.trim().toLowerCase());
+        if (!user || user.role === 'admin' || isDailyUser) return;
         try {
             const [pending, roster] = await Promise.all([
                 dataService.getPendingActivityReports(user.id),
