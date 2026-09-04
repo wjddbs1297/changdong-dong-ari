@@ -12,6 +12,7 @@ var MAX_CLUB_ACCOUNTS = 40;
 var SESSION_SECONDS = 7200;
 var MAX_LOGIN_FAILURES = 5;
 var LOCK_MINUTES = 15;
+var ACTIVITY_LOG_START_DATE = "2026-09-04";
 
 function doGet(e) {
     return handleRequest(e);
@@ -423,6 +424,10 @@ function createBooking(params) {
         var totalHours = 0;
 
         if (!isAdmin) {
+            if (collectPendingActivityReports(userId, sheet).length > 0) {
+                return sendResponse({ message: "미작성 활동일지가 있습니다. 활동일지를 먼저 제출한 뒤 새 예약을 진행해주세요." }, false);
+            }
+
             for (var i = 1; i < data.length; i++) {
                 var rowUserId = String(data[i][1]).trim();
                 var rowDate = formatDateSafe(data[i][3]);
@@ -670,16 +675,35 @@ function getPendingActivityReports(params) {
     var sheet = ss.getSheetByName("예약내역");
     if (!sheet) return sendResponse([]);
 
+    return sendResponse(collectPendingActivityReports(userId, sheet));
+}
+
+// 엑셀로 추가한 정기대관도 오늘 이후 예약이면 예약 ID와 Pending 상태를 자동 보완합니다.
+function collectPendingActivityReports(userId, sheet) {
     var data = sheet.getDataRange().getValues();
     var nowKey = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm");
     var pending = [];
     for (var i = 1; i < data.length; i++) {
         var row = data[i];
         if (String(row[1]).trim().toLowerCase() !== userId.toLowerCase()) continue;
-        if (String(row[22]).trim() !== "Pending") continue;
 
         var date = formatDateSafe(row[3]);
         var endTime = formatTimeSafe(row[5]);
+        if (!date || !endTime) continue;
+
+        var reportStatus = String(row[22] || "").trim();
+        if (date >= ACTIVITY_LOG_START_DATE && !reportStatus) {
+            reportStatus = "Pending";
+            sheet.getRange(i + 1, 23).setValue(reportStatus);
+            row[22] = reportStatus;
+        }
+        if (reportStatus !== "Pending") continue;
+
+        if (!String(row[0] || "").trim()) {
+            row[0] = "BK_IMPORT_" + new Date().getTime() + "_" + (i + 1);
+            sheet.getRange(i + 1, 1).setValue(row[0]);
+        }
+
         var endKey = date + " " + endTime;
         if (endKey > nowKey) continue;
 
@@ -693,7 +717,7 @@ function getPendingActivityReports(params) {
     pending.sort(function (a, b) {
         return (a.date + " " + a.endTime).localeCompare(b.date + " " + b.endTime);
     });
-    return sendResponse(pending);
+    return pending;
 }
 
 function submitActivityLog(params) {
