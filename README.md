@@ -12,6 +12,15 @@
 
 `GAS_FINAL_DEPLOY.js`를 Apps Script 프로젝트에 반영한 뒤 새 버전으로 웹 앱을 배포해야 새 API가 작동합니다.
 
+### 4자리 PIN 초기 설정
+
+1. Apps Script를 새 버전으로 배포합니다.
+2. Apps Script 편집기에서 `generateInitialPinsFromEditor`를 한 번 실행합니다.
+3. 실행 로그에 출력된 계정별 임시 PIN을 안전하게 전달합니다.
+4. 첫 로그인에서 각 계정이 새 PIN으로 반드시 변경합니다.
+
+PIN 원문은 시트와 GitHub에 저장하지 않으며, PIN이 없는 계정만 초기 발급 대상입니다. 로그인은 5회 실패 시 15분 잠금되고 세션은 2시간 동안 유지됩니다.
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:

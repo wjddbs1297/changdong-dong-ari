@@ -1,19 +1,22 @@
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { LogOut, User, Music, Bell, MessageCircle, FileText } from 'lucide-react';
 import { PendingActivityReports } from './PendingActivityReports';
+import { ChangePinModal } from './ChangePinModal';
 
 interface LayoutProps {
     children: ReactNode;
 }
 
 export function Layout({ children }: LayoutProps) {
-    const { user, logout } = useAuth();
+    const { user, logout, mustChangePin } = useAuth();
+    const [pinModalOpen, setPinModalOpen] = useState(false);
     const navigate = useNavigate();
 
-    const handleLogout = () => {
-        logout();
+    const handleLogout = async () => {
+        await logout();
         navigate('/login');
     };
 
@@ -56,15 +59,13 @@ export function Layout({ children }: LayoutProps) {
                                     <span className="hidden sm:inline">내 예약</span>
                                 </Link>
                                 {user.role === 'admin' && (
-                                    <Link
-                                        to="/admin-logs"
-                                        className="text-brand-600 hover:text-brand-700 font-semibold transition-colors flex items-center space-x-1 px-2"
-                                    >
-                                        <FileText size={20} />
-                                        <span className="hidden sm:inline">전체 대장</span>
-                                    </Link>
+                                    <>
+                                        <Link to="/admin-logs" className="text-brand-600 hover:text-brand-700 font-semibold transition-colors flex items-center space-x-1 px-2"><FileText size={20} /><span className="hidden sm:inline">전체 대장</span></Link>
+                                        <Link to="/admin-accounts" className="text-brand-600 hover:text-brand-700 font-semibold transition-colors px-2">계정 관리</Link>
+                                    </>
                                 )}
                                 <div className="h-6 w-px bg-gray-200" />
+                                <button onClick={() => setPinModalOpen(true)} className="text-sm font-semibold text-gray-600 hover:text-brand-600">PIN 변경</button>
                                 <div className="flex items-center space-x-2">
                                     <span className="text-sm font-semibold text-gray-700 hidden sm:block">
                                         {user.id} <span className="text-gray-400 font-normal">| {user.name}</span>
@@ -95,6 +96,7 @@ export function Layout({ children }: LayoutProps) {
                 {children}
             </main>
             <PendingActivityReports />
+            <ChangePinModal open={pinModalOpen || mustChangePin} required={mustChangePin} onClose={() => setPinModalOpen(false)} />
         </div>
     );
 }

@@ -5,8 +5,10 @@ import { dataService } from '../services/DataService';
 
 interface AuthContextType {
     user: User | null;
-    login: (userId: string) => Promise<void>;
-    logout: () => void;
+    login: (userId: string, pin: string) => Promise<void>;
+    logout: () => Promise<void>;
+    changePin: (currentPin: string, newPin: string) => Promise<void>;
+    mustChangePin: boolean;
     isLoading: boolean;
     error: string | null;
 }
@@ -15,48 +17,46 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+    const [mustChangePin, setMustChangePin] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // Persist login (simple version)
     useEffect(() => {
-        const storedUserId = localStorage.getItem('userId');
-        if (storedUserId) {
-            dataService.login(storedUserId).then(u => {
-                if (u) setUser(u);
-            });
-        }
+        dataService.restoreSession()
+            .then(result => {
+                if (result) { setUser(result.user); setMustChangePin(result.mustChangePin); }
+            })
+            .finally(() => setIsLoading(false));
     }, []);
 
-    const login = async (userId: string) => {
+    const login = async (userId: string, pin: string) => {
         setIsLoading(true);
         setError(null);
         try {
-            const u = await dataService.login(userId);
-            if (u) {
-                if (u.status === 'Inactive') {
-                    throw new Error('비활성화된 계정입니다.');
-                }
-                setUser(u);
-                localStorage.setItem('userId', u.id);
-            } else {
-                throw new Error('존재하지 않는 User ID입니다.');
-            }
-        } catch (err: any) {
-            setError(err.message || '로그인 실패');
+            const result = await dataService.login(userId, pin);
+            setUser(result.user);
+            setMustChangePin(result.mustChangePin);
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : '로그인 실패');
             throw err;
         } finally {
             setIsLoading(false);
         }
     };
 
-    const logout = () => {
+    const logout = async () => {
+        await dataService.logout();
         setUser(null);
-        localStorage.removeItem('userId');
+        setMustChangePin(false);
+    };
+
+    const changePin = async (currentPin: string, newPin: string) => {
+        await dataService.changePin(currentPin, newPin);
+        setMustChangePin(false);
     };
 
     return (
-        <AuthContext.Provider value={{ user, login, logout, isLoading, error }}>
+        <AuthContext.Provider value={{ user, login, logout, changePin, mustChangePin, isLoading, error }}>
             {children}
         </AuthContext.Provider>
     );

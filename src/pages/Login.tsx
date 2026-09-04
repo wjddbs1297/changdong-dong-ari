@@ -5,15 +5,16 @@ import { ArrowRight, Loader2 } from 'lucide-react';
 
 export function Login() {
     const [userId, setUserId] = useState('');
+    const [pin, setPin] = useState('');
     const { login, isLoading, error } = useAuth();
     const navigate = useNavigate();
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!userId.trim()) return;
+        if (!userId.trim() || !/^\d{4}$/.test(pin)) return;
 
         try {
-            await login(userId.trim());
+            await login(userId.trim(), pin);
             navigate('/');
         } catch (err) {
             // Error handled in context/state, but logged here
@@ -29,18 +30,7 @@ export function Login() {
                         <img
                             src="/logo.jpg"
                             alt="시립창동청소년센터"
-                            className="h-24 object-contain cursor-help"
-                            onClick={async () => {
-                                try {
-                                    alert('서버 연결 확인 중...');
-                                    const { dataService } = await import('../services/DataService');
-                                    const config = await dataService.getConfig();
-                                    const userList = config.users.map(u => `${u.id}(${u.name})`).join(', ');
-                                    alert(`[서버 응답 성공]\n등록된 사용자 목록:\n${userList || '없음'}`);
-                                } catch (e) {
-                                    alert(`[서버 연결 실패] 에러: ${e}`);
-                                }
-                            }}
+                            className="h-24 object-contain"
                         />
                     </div>
                 </div>
@@ -67,6 +57,22 @@ export function Login() {
                             />
                         </div>
 
+                        <div>
+                            <label htmlFor="pin" className="block text-sm font-medium text-gray-700 mb-2">4자리 PIN</label>
+                            <input
+                                type="password"
+                                id="pin"
+                                inputMode="numeric"
+                                autoComplete="current-password"
+                                maxLength={4}
+                                value={pin}
+                                onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                                placeholder="4자리 숫자"
+                                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none tracking-[0.5em]"
+                                disabled={isLoading}
+                            />
+                        </div>
+
                         {error && (
                             <div className="p-4 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100 flex items-center">
                                 <span className="font-semibold mr-1">Error:</span> {error}
@@ -75,7 +81,7 @@ export function Login() {
 
                         <button
                             type="submit"
-                            disabled={isLoading}
+                            disabled={isLoading || !userId.trim() || pin.length !== 4}
                             className="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-3 px-4 rounded-lg transition-all flex items-center justify-center shadow-md hover:shadow-lg disabled:opacity-70 disabled:cursor-not-allowed"
                         >
                             {isLoading ? (

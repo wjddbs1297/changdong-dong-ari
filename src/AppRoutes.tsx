@@ -9,6 +9,7 @@ import { MyReservations } from './pages/MyReservations';
 import { Notices } from './pages/Notices';
 import { Suggestions } from './pages/Suggestions';
 import { AdminLogs } from './pages/AdminLogs';
+import { AdminAccounts } from './pages/AdminAccounts';
 
 // Protected Route Component
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -69,6 +70,7 @@ function AppRoutes() {
                             </ProtectedRoute>
                         }
                     />
+                    <Route path="/admin-accounts" element={<ProtectedRoute><AdminAccounts /></ProtectedRoute>} />
                 </Routes>
             </AuthProvider>
         </BrowserRouter>

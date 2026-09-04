@@ -146,7 +146,7 @@ export function Dashboard() {
         const end = parseInt(b.endTime.toString().split(':')[0]);
         return hour >= start && hour < end;
     });
-    const getUserName = (userId: string) => users.find(u => u.id === userId)?.name || userId;
+    const getUserName = (userId: string) => users.find(u => u.id === userId)?.name || bookings.find(b => b.userId === userId)?.userName || userId;
 
     if (rooms.length === 0 || !selectedRoom) {
         return <div className="p-8 text-center text-gray-500">연습실 정보를 불러오는 중...</div>;

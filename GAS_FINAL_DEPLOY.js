@@ -9,6 +9,9 @@
 var SPREADSHEET_ID = "1PBbGtI-TM10OpWijNd4u3Hbfll97dFPqwwof3VVkSjs";
 var TIMEZONE = "Asia/Seoul";
 var MAX_CLUB_ACCOUNTS = 40;
+var SESSION_SECONDS = 7200;
+var MAX_LOGIN_FAILURES = 5;
+var LOCK_MINUTES = 15;
 
 function doGet(e) {
     return handleRequest(e);
@@ -16,6 +19,120 @@ function doGet(e) {
 
 function doPost(e) {
     return handleRequest(e);
+}
+
+function isValidPin(pin) {
+    return /^\d{4}$/.test(String(pin || "")) && !/^(\d)\1{3}$/.test(String(pin)) && ["1234", "4321", "0000"].indexOf(String(pin)) === -1;
+}
+
+function getPinPepper() {
+    var properties = PropertiesService.getScriptProperties();
+    var pepper = properties.getProperty("PIN_PEPPER");
+    if (!pepper) {
+        pepper = Utilities.getUuid() + Utilities.getUuid();
+        properties.setProperty("PIN_PEPPER", pepper);
+    }
+    return pepper;
+}
+
+function hashPin(pin, salt) {
+    var bytes = Utilities.computeHmacSha256Signature(String(pin) + ":" + String(salt), getPinPepper());
+    return Utilities.base64EncodeWebSafe(bytes);
+}
+
+function findUserRecord(userId) {
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName("Users");
+    if (!sheet) return null;
+    var data = sheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+        if (String(data[i][0]).trim().toLowerCase() === String(userId).trim().toLowerCase()) {
+            return { sheet: sheet, rowNumber: i + 1, row: data[i] };
+        }
+    }
+    return null;
+}
+
+function publicUser(record) {
+    return { id: String(record.row[0]), name: String(record.row[1]), status: record.row[2] || "Active", role: record.row[3] || "user" };
+}
+
+function createSession(record) {
+    var token = Utilities.getUuid() + Utilities.getUuid();
+    var session = { user: publicUser(record), mustChangePin: record.row[6] === true || String(record.row[6]).toUpperCase() === "TRUE" };
+    CacheService.getScriptCache().put("session:" + token, JSON.stringify(session), SESSION_SECONDS);
+    return { sessionToken: token, user: session.user, mustChangePin: session.mustChangePin };
+}
+
+function getSession(token) {
+    if (!token) return null;
+    var value = CacheService.getScriptCache().get("session:" + token);
+    return value ? JSON.parse(value) : null;
+}
+
+function loginWithPin(params) {
+    var userId = String(params.userId || "").trim();
+    var pin = String(params.pin || "");
+    if (!userId || !/^\d{4}$/.test(pin)) return sendResponse({ message: "동아리 아이디와 4자리 PIN을 확인해주세요." }, false);
+    var record = findUserRecord(userId);
+    if (!record) return sendResponse({ message: "동아리 아이디 또는 PIN이 올바르지 않습니다." }, false);
+    if (String(record.row[2] || "Active") !== "Active") return sendResponse({ message: "비활성화된 계정입니다." }, false);
+
+    var lockedUntil = record.row[8] ? new Date(record.row[8]) : null;
+    if (lockedUntil && lockedUntil.getTime() > new Date().getTime()) {
+        return sendResponse({ message: "로그인 시도가 너무 많아 잠시 잠긴 계정입니다. 15분 후 다시 시도해주세요." }, false);
+    }
+    var salt = String(record.row[4] || "");
+    var storedHash = String(record.row[5] || "");
+    if (!salt || !storedHash) return sendResponse({ message: "PIN이 아직 설정되지 않은 계정입니다. 관리자에게 문의해주세요." }, false);
+
+    if (hashPin(pin, salt) !== storedHash) {
+        var failures = (parseInt(record.row[7]) || 0) + 1;
+        var lockValue = "";
+        if (failures >= MAX_LOGIN_FAILURES) {
+            lockValue = new Date(new Date().getTime() + LOCK_MINUTES * 60 * 1000);
+            failures = 0;
+        }
+        record.sheet.getRange(record.rowNumber, 8, 1, 2).setValues([[failures, lockValue]]);
+        return sendResponse({ message: "동아리 아이디 또는 PIN이 올바르지 않습니다." }, false);
+    }
+
+    var now = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss");
+    record.sheet.getRange(record.rowNumber, 8, 1, 3).setValues([[0, "", now]]);
+    return sendResponse(createSession(record));
+}
+
+function setPinForRecord(record, pin, mustChange) {
+    if (!isValidPin(pin)) throw new Error("PIN은 쉬운 번호를 제외한 4자리 숫자여야 합니다.");
+    var salt = Utilities.getUuid();
+    record.sheet.getRange(record.rowNumber, 5, 1, 5).setValues([[salt, hashPin(pin, salt), mustChange === true, 0, ""]]);
+}
+
+// 최초 배포 시 Apps Script 편집기에서만 실행하는 초기 PIN 설정 함수
+function setInitialPinFromEditor(userId, pin) {
+    var record = findUserRecord(userId);
+    if (!record) throw new Error("계정을 찾을 수 없습니다.");
+    setPinForRecord(record, String(pin), true);
+}
+
+// PIN이 없는 계정에만 서로 다른 임시 PIN을 발급하고 실행 로그에 1회 출력합니다.
+function generateInitialPinsFromEditor() {
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName("Users");
+    if (!sheet) throw new Error("Users 시트를 찾을 수 없습니다.");
+    var data = sheet.getDataRange().getValues();
+    var issued = [];
+    var usedPins = {};
+    for (var i = 1; i < data.length; i++) {
+        if (!data[i][0] || data[i][5]) continue;
+        var pin;
+        do { pin = String(Math.floor(1000 + Math.random() * 9000)); }
+        while (!isValidPin(pin) || usedPins[pin]);
+        usedPins[pin] = true;
+        var record = { sheet: sheet, rowNumber: i + 1, row: data[i] };
+        setPinForRecord(record, pin, true);
+        issued.push({ userId: String(data[i][0]), name: String(data[i][1]), temporaryPin: pin });
+    }
+    console.log(JSON.stringify(issued));
+    return issued;
 }
 
 function handleRequest(e) {
@@ -37,18 +154,41 @@ function handleRequest(e) {
 
         var method = params.method;
 
-        if (!method && e.postData) {
-            return createBooking(params);
+        if (method === "LOGIN") return loginWithPin(params);
+
+        var session = getSession(params.sessionToken);
+        if (!session) return sendResponse({ message: "로그인이 만료되었습니다. 다시 로그인해주세요." }, false);
+        var liveRecord = findUserRecord(session.user.id);
+        if (!liveRecord || String(liveRecord.row[2] || "Active") !== "Active") return sendResponse({ message: "비활성화된 계정입니다." }, false);
+        session.user = publicUser(liveRecord);
+        session.mustChangePin = liveRecord.row[6] === true || String(liveRecord.row[6]).toUpperCase() === "TRUE";
+        params.authUser = session.user;
+        if (session.user.role !== "admin") params.userId = session.user.id;
+
+        if (method === "VERIFY_SESSION") {
+            return sendResponse({ user: session.user, mustChangePin: session.mustChangePin });
+        }
+        if (method === "LOGOUT") {
+            CacheService.getScriptCache().remove("session:" + params.sessionToken);
+            return sendResponse({ message: "Logged out" });
+        }
+        if (method === "CHANGE_PIN") return changePin(params);
+        if (method === "ADMIN_RESET_PIN") return adminResetPin(params);
+
+        if (session.mustChangePin) {
+            return sendResponse({ message: "계속하려면 임시 PIN을 먼저 변경해주세요." }, false);
         }
 
         // 1. 설정 불러오기 (시트에서 읽기)
         if (method === "GET_CONFIG") {
             var config = getSheetConfig();
+            if (session.user.role !== "admin") config.users = [];
             return sendResponse(config);
         }
 
         // 2. 예약 조회
         if (method === "GET") {
+            if (!params.date && !params.userId && session.user.role !== "admin") return sendResponse({ message: "관리자 권한이 필요합니다." }, false);
             return getBookings(params);
         }
 
@@ -64,6 +204,7 @@ function handleRequest(e) {
 
         // 5. 공지사항 생성
         if (method === "CREATE_NOTICE") {
+            if (session.user.role !== "admin") return sendResponse({ message: "관리자 권한이 필요합니다." }, false);
             return createNotice(params);
         }
 
@@ -104,6 +245,31 @@ function handleRequest(e) {
 // ==========================================
 // 핵심 로직
 // ==========================================
+
+function changePin(params) {
+    var record = findUserRecord(params.authUser.id);
+    if (!record) return sendResponse({ message: "계정을 찾을 수 없습니다." }, false);
+    var currentPin = String(params.currentPin || "");
+    var newPin = String(params.newPin || "");
+    if (hashPin(currentPin, String(record.row[4] || "")) !== String(record.row[5] || "")) {
+        return sendResponse({ message: "현재 PIN이 올바르지 않습니다." }, false);
+    }
+    if (currentPin === newPin) return sendResponse({ message: "현재 PIN과 다른 PIN을 사용해주세요." }, false);
+    try { setPinForRecord(record, newPin, false); }
+    catch (error) { return sendResponse({ message: error.message }, false); }
+    var session = { user: publicUser(record), mustChangePin: false };
+    CacheService.getScriptCache().put("session:" + params.sessionToken, JSON.stringify(session), SESSION_SECONDS);
+    return sendResponse({ message: "PIN이 변경되었습니다." });
+}
+
+function adminResetPin(params) {
+    if (params.authUser.role !== "admin") return sendResponse({ message: "관리자 권한이 필요합니다." }, false);
+    var record = findUserRecord(params.userId);
+    if (!record) return sendResponse({ message: "계정을 찾을 수 없습니다." }, false);
+    try { setPinForRecord(record, String(params.newPin || ""), true); }
+    catch (error) { return sendResponse({ message: error.message }, false); }
+    return sendResponse({ message: "임시 PIN으로 초기화했습니다." });
+}
 
 
 function getSheetConfig() {
@@ -182,6 +348,7 @@ function getBookings(params) {
 
         if (targetDate && rowDate !== targetDate) continue;
         if (targetUser && String(row[1]).toLowerCase() !== targetUser.toLowerCase()) continue;
+        var canSeeDetails = params.authUser.role === "admin" || String(row[1]).toLowerCase() === params.authUser.id.toLowerCase();
 
         bookings.push({
             id: row[0],
@@ -192,17 +359,17 @@ function getBookings(params) {
             endTime: formatTimeSafe(row[5]),
             roomId: row[6],
             createdAt: row[7],
-            phoneNumber: row[8] || "",
-            activityContent: row[9] || "",
-            suggestion: row[10] || "",
+            phoneNumber: canSeeDetails ? (row[8] || "") : "",
+            activityContent: canSeeDetails ? (row[9] || "") : "",
+            suggestion: canSeeDetails ? (row[10] || "") : "",
             headcount: {
                 elemM: parseInt(row[11]) || 0, elemF: parseInt(row[12]) || 0,
                 midM: parseInt(row[13]) || 0, midF: parseInt(row[14]) || 0,
                 highM: parseInt(row[15]) || 0, highF: parseInt(row[16]) || 0,
                 u24M: parseInt(row[17]) || 0, u24F: parseInt(row[18]) || 0
             },
-            participants: row[19] || "",
-            signature: row[20] || "",
+            participants: canSeeDetails ? (row[19] || "") : "",
+            signature: canSeeDetails ? (row[20] || "") : "",
             expectedHeadcount: parseInt(row[21]) || 0,
             reportStatus: row[22] || "",
             reportCompletedAt: row[23] || "",
