@@ -57,9 +57,16 @@ function publicUser(record) {
     return { id: String(record.row[0]), name: String(record.row[1]), status: record.row[2] || "Active", role: record.row[3] || "user" };
 }
 
+function isPinExemptRecord(record) {
+    var id = String(record.row[0] || "").trim().toLowerCase();
+    var role = String(record.row[3] || "user").trim().toLowerCase();
+    return role !== "admin" && (id === "daily" || id === "데일리");
+}
+
 function createSession(record) {
     var token = Utilities.getUuid() + Utilities.getUuid();
-    var session = { user: publicUser(record), mustChangePin: record.row[6] === true || String(record.row[6]).toUpperCase() === "TRUE" };
+    var mustChangePin = !isPinExemptRecord(record) && (record.row[6] === true || String(record.row[6]).toUpperCase() === "TRUE");
+    var session = { user: publicUser(record), mustChangePin: mustChangePin };
     CacheService.getScriptCache().put("session:" + token, JSON.stringify(session), SESSION_SECONDS);
     return { sessionToken: token, user: session.user, mustChangePin: session.mustChangePin };
 }
@@ -73,10 +80,18 @@ function getSession(token) {
 function loginWithPin(params) {
     var userId = String(params.userId || "").trim();
     var pin = String(params.pin || "");
-    if (!userId || !/^\d{4}$/.test(pin)) return sendResponse({ message: "동아리 아이디와 4자리 PIN을 확인해주세요." }, false);
+    if (!userId) return sendResponse({ message: "동아리 아이디를 입력해주세요." }, false);
     var record = findUserRecord(userId);
     if (!record) return sendResponse({ message: "동아리 아이디 또는 PIN이 올바르지 않습니다." }, false);
     if (String(record.row[2] || "Active") !== "Active") return sendResponse({ message: "비활성화된 계정입니다." }, false);
+
+    if (isPinExemptRecord(record)) {
+        var dailyNow = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss");
+        record.sheet.getRange(record.rowNumber, 8, 1, 3).setValues([[0, "", dailyNow]]);
+        return sendResponse(createSession(record));
+    }
+
+    if (!/^\d{4}$/.test(pin)) return sendResponse({ message: "동아리 아이디와 4자리 PIN을 확인해주세요." }, false);
 
     var lockedUntil = record.row[8] ? new Date(record.row[8]) : null;
     if (lockedUntil && lockedUntil.getTime() > new Date().getTime()) {
@@ -124,8 +139,10 @@ function generateInitialPinsFromEditor() {
     var issued = [];
     for (var i = 1; i < data.length; i++) {
         if (!data[i][0] || data[i][5]) continue;
+        var candidate = { sheet: sheet, rowNumber: i + 1, row: data[i] };
+        if (isPinExemptRecord(candidate)) continue;
         var pin = "0000";
-        var record = { sheet: sheet, rowNumber: i + 1, row: data[i] };
+        var record = candidate;
         setPinForRecord(record, pin, true, true);
         issued.push({ userId: String(data[i][0]), name: String(data[i][1]), temporaryPin: pin });
     }
@@ -247,6 +264,7 @@ function handleRequest(e) {
 function changePin(params) {
     var record = findUserRecord(params.authUser.id);
     if (!record) return sendResponse({ message: "계정을 찾을 수 없습니다." }, false);
+    if (isPinExemptRecord(record)) return sendResponse({ message: "데일리 계정은 PIN을 사용하지 않습니다." }, false);
     var currentPin = String(params.currentPin || "");
     var newPin = String(params.newPin || "");
     if (hashPin(currentPin, String(record.row[4] || "")) !== String(record.row[5] || "")) {
@@ -264,6 +282,7 @@ function adminResetPin(params) {
     if (params.authUser.role !== "admin") return sendResponse({ message: "관리자 권한이 필요합니다." }, false);
     var record = findUserRecord(params.userId);
     if (!record) return sendResponse({ message: "계정을 찾을 수 없습니다." }, false);
+    if (isPinExemptRecord(record)) return sendResponse({ message: "데일리 계정은 PIN을 사용하지 않습니다." }, false);
     try { setPinForRecord(record, String(params.newPin || ""), true); }
     catch (error) { return sendResponse({ message: error.message }, false); }
     return sendResponse({ message: "임시 PIN으로 초기화했습니다." });

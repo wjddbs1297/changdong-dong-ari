@@ -14,6 +14,7 @@ export function Layout({ children }: LayoutProps) {
     const { user, logout, mustChangePin } = useAuth();
     const [pinModalOpen, setPinModalOpen] = useState(false);
     const navigate = useNavigate();
+    const isDailyUser = !!user && ['daily', '데일리'].includes(user.id.trim().toLowerCase());
 
     const handleLogout = async () => {
         await logout();
@@ -65,7 +66,7 @@ export function Layout({ children }: LayoutProps) {
                                     </>
                                 )}
                                 <div className="h-6 w-px bg-gray-200" />
-                                <button onClick={() => setPinModalOpen(true)} className="text-sm font-semibold text-gray-600 hover:text-brand-600">PIN 변경</button>
+                                {!isDailyUser && <button onClick={() => setPinModalOpen(true)} className="text-sm font-semibold text-gray-600 hover:text-brand-600">PIN 변경</button>}
                                 <div className="flex items-center space-x-2">
                                     <span className="text-sm font-semibold text-gray-700 hidden sm:block">
                                         {user.id} <span className="text-gray-400 font-normal">| {user.name}</span>
@@ -96,7 +97,7 @@ export function Layout({ children }: LayoutProps) {
                 {children}
             </main>
             <PendingActivityReports />
-            <ChangePinModal open={pinModalOpen || mustChangePin} required={mustChangePin} onClose={() => setPinModalOpen(false)} />
+            {!isDailyUser && <ChangePinModal open={pinModalOpen || mustChangePin} required={mustChangePin} onClose={() => setPinModalOpen(false)} />}
         </div>
     );
 }

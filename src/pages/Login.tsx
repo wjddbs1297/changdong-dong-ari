@@ -8,13 +8,14 @@ export function Login() {
     const [pin, setPin] = useState('');
     const { login, isLoading, error } = useAuth();
     const navigate = useNavigate();
+    const isDailyUser = ['daily', '데일리'].includes(userId.trim().toLowerCase());
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!userId.trim() || !/^\d{4}$/.test(pin)) return;
+        if (!userId.trim() || (!isDailyUser && !/^\d{4}$/.test(pin))) return;
 
         try {
-            await login(userId.trim(), pin);
+            await login(userId.trim(), isDailyUser ? '' : pin);
             navigate('/');
         } catch (err) {
             // Error handled in context/state, but logged here
@@ -42,7 +43,7 @@ export function Login() {
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-6">
-                        <div>
+                        {!isDailyUser && <div>
                             <label htmlFor="userId" className="block text-sm font-medium text-gray-700 mb-2">
                                 동아리 아이디
                             </label>
@@ -55,7 +56,9 @@ export function Login() {
                                 className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
                                 disabled={isLoading}
                             />
-                        </div>
+                        </div>}
+
+                        {isDailyUser && <div className="rounded-lg border border-brand-100 bg-brand-50 p-3 text-sm text-brand-700">데일리 계정은 PIN 없이 로그인합니다.</div>}
 
                         <div>
                             <label htmlFor="pin" className="block text-sm font-medium text-gray-700 mb-2">4자리 PIN</label>
@@ -81,7 +84,7 @@ export function Login() {
 
                         <button
                             type="submit"
-                            disabled={isLoading || !userId.trim() || pin.length !== 4}
+                            disabled={isLoading || !userId.trim() || (!isDailyUser && pin.length !== 4)}
                             className="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-3 px-4 rounded-lg transition-all flex items-center justify-center shadow-md hover:shadow-lg disabled:opacity-70 disabled:cursor-not-allowed"
                         >
                             {isLoading ? (

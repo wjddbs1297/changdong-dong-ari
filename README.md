@@ -21,7 +21,7 @@
 3. PIN이 아직 없는 모든 계정의 초기 PIN이 `0000`으로 설정됩니다.
 4. 첫 로그인에서 각 계정이 `0000`이 아닌 새 PIN으로 반드시 변경합니다.
 
-초기 PIN `0000`도 시트에는 해시로 저장되며, PIN이 없는 계정만 초기 설정 대상입니다. 로그인은 5회 실패 시 15분 잠금되고 세션은 2시간 동안 유지됩니다.
+초기 PIN `0000`도 시트에는 해시로 저장되며, PIN이 없는 계정만 초기 설정 대상입니다. 단, `데일리` 계정은 PIN 없이 로그인하고 관리자와 일반 동아리 계정은 PIN을 사용합니다. 로그인은 5회 실패 시 15분 잠금되고 세션은 2시간 동안 유지됩니다.
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
