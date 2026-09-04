@@ -54,14 +54,14 @@ export function Login() {
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div>
                             <label htmlFor="userId" className="block text-sm font-medium text-gray-700 mb-2">
-                                동아리 고유코드 (User ID)
+                                동아리 아이디
                             </label>
                             <input
                                 type="text"
                                 id="userId"
                                 value={userId}
                                 onChange={(e) => setUserId(e.target.value)}
-                                placeholder="고유코드를 입력하세요"
+                                placeholder="동아리 아이디를 입력해주세요"
                                 className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
                                 disabled={isLoading}
                             />
@@ -91,8 +91,7 @@ export function Login() {
 
                     <div className="mt-6 text-center text-sm text-gray-500 bg-gray-50 p-4 rounded-lg">
                         <p className="font-semibold mb-1">📢 안내</p>
-                        User01 ~ User30 등 부여받은<br />
-                        <span className="text-brand-600 font-bold">동아리 고유코드</span>를 입력해주세요.
+                        부여받은 <span className="text-brand-600 font-bold">동아리 아이디</span>를 입력해주세요.
                     </div>
                 </div>
             </div>
