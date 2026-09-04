@@ -6,7 +6,8 @@ import type { Room, Booking, User, Notice } from '../types';
 import { dataService } from '../services/DataService';
 import { useAuth } from '../contexts/AuthContext';
 import { PhoneInputModal } from '../components/PhoneInputModal';
-import { ActivityModal, printActivityLog } from '../components/ActivityModal';
+import { printActivityLog } from '../components/ActivityModal';
+import { BookingHeadcountModal } from '../components/BookingHeadcountModal';
 
 export function Dashboard() {
     const { user } = useAuth();
@@ -20,7 +21,7 @@ export function Dashboard() {
     const [loading, setLoading] = useState(false);
     const [isPhoneModalOpen, setIsPhoneModalOpen] = useState(false);
     const [userPhoneNumber, setUserPhoneNumber] = useState<string>('');
-    const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
+    const [isHeadcountModalOpen, setIsHeadcountModalOpen] = useState(false);
     const [pendingPhoneNumber, setPendingPhoneNumber] = useState<string | undefined>(undefined);
 
     const isSun = isSunday(selectedDate);
@@ -108,28 +109,17 @@ export function Dashboard() {
         const isDailyUser = user.id.toLowerCase() === 'daily' || user.id === '데일리' || user.name?.includes('데일리');
         if (isDailyUser && !userPhoneNumber) { setIsPhoneModalOpen(true); return; }
         setPendingPhoneNumber(isDailyUser ? userPhoneNumber : undefined);
-        setIsActivityModalOpen(true);
+        setIsHeadcountModalOpen(true);
     };
 
     const handlePhoneSubmit = (phoneNumber: string) => {
         setUserPhoneNumber(phoneNumber);
+        setPendingPhoneNumber(phoneNumber);
         setIsPhoneModalOpen(false);
+        if (selectedSlots.length > 0) setIsHeadcountModalOpen(true);
     };
 
-    const handleActivitySubmit = async (activityData: {
-        activityContent: string; suggestion: string;
-        headcount: { elemM:number; elemF:number; midM:number; midF:number; highM:number; highF:number; u24M:number; u24F:number; };
-        participants: string[]; signature: string;
-    }) => {
-        setIsActivityModalOpen(false);
-        await processBooking(pendingPhoneNumber, activityData);
-    };
-
-    const processBooking = async (phoneNumber?: string, activityData?: {
-        activityContent: string; suggestion: string;
-        headcount: { elemM:number; elemF:number; midM:number; midF:number; highM:number; highF:number; u24M:number; u24F:number; };
-        participants: string[]; signature: string;
-    }) => {
+    const processBooking = async (expectedHeadcount: number) => {
         if (!user || !selectedRoom || selectedSlots.length === 0) return;
         const dateStr = format(selectedDate, 'yyyy-MM-dd');
         const startTime = `${Math.min(...selectedSlots)}:00`;
@@ -138,14 +128,12 @@ export function Dashboard() {
         try {
             await dataService.createBooking({
                 userId: user.id, roomId: selectedRoom.id,
-                date: dateStr, startTime, duration, phoneNumber,
-                activityContent: activityData?.activityContent,
-                suggestion: activityData?.suggestion,
-                headcount: activityData?.headcount,
-                participants: activityData?.participants,
-                signature: activityData?.signature,
+                date: dateStr, startTime, duration,
+                phoneNumber: pendingPhoneNumber,
+                expectedHeadcount,
             });
-            alert('예약이 완료되었습니다.');
+            alert('예약이 완료되었습니다. 활동 종료 후 다음 로그인 시 활동일지를 작성해주세요.');
+            setIsHeadcountModalOpen(false);
             setSelectedSlots([]);
             loadBookings();
         } catch (err: any) {
@@ -295,10 +283,10 @@ export function Dashboard() {
 
             <PhoneInputModal isOpen={isPhoneModalOpen} onClose={() => setIsPhoneModalOpen(false)} onSubmit={handlePhoneSubmit} isLoading={loading} />
 
-            <ActivityModal
-                isOpen={isActivityModalOpen}
-                onClose={() => setIsActivityModalOpen(false)}
-                onSubmit={handleActivitySubmit}
+            <BookingHeadcountModal
+                isOpen={isHeadcountModalOpen}
+                onClose={() => setIsHeadcountModalOpen(false)}
+                onSubmit={processBooking}
                 isLoading={loading}
                 roomName={selectedRoom?.name ?? ''}
                 dateStr={format(selectedDate, 'yyyy. MM. dd (EEE)', { locale: ko })}

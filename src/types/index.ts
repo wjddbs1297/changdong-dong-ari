@@ -32,6 +32,10 @@ export interface Booking {
     };
     participants?: string;
     signature?: string;
+    expectedHeadcount?: number;
+    reportStatus?: 'Pending' | 'Completed' | '';
+    reportCompletedAt?: string;
+    reportUpdatedBy?: string;
 }
 
 export interface BookingRequest {
@@ -41,6 +45,16 @@ export interface BookingRequest {
     startTime: string; // HH:00
     duration: number; // in hours, max 3
     phoneNumber?: string; // Optional: Only for 'Daily' users
+    expectedHeadcount: number;
+}
+
+export interface ClubMember {
+    clubUserId: string;
+    memberId: string;
+    name: string;
+    schoolLevel: '초등' | '중등' | '고등' | '24세 이하';
+    gender: '남' | '여';
+    status: 'Active' | 'Inactive';
 }
 
 export interface Notice {

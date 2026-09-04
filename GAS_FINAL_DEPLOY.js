@@ -8,6 +8,7 @@
 // 스프레드시트 ID (사용자 제공)
 var SPREADSHEET_ID = "1PBbGtI-TM10OpWijNd4u3Hbfll97dFPqwwof3VVkSjs";
 var TIMEZONE = "Asia/Seoul";
+var MAX_CLUB_ACCOUNTS = 40;
 
 function doGet(e) {
     return handleRequest(e);
@@ -81,6 +82,18 @@ function handleRequest(e) {
             return updateBooking(params);
         }
 
+        if (method === "GET_PENDING_REPORTS") {
+            return getPendingActivityReports(params);
+        }
+
+        if (method === "GET_MEMBERS") {
+            return getMembers(params);
+        }
+
+        if (method === "SUBMIT_ACTIVITY_LOG") {
+            return submitActivityLog(params);
+        }
+
         return sendResponse({ message: "Unknown Method" }, false);
 
     } catch (error) {
@@ -139,7 +152,16 @@ function getSheetConfig() {
         }
     }
 
-    return { users: users, rooms: rooms };
+    var clubAccountCount = users.filter(function (u) {
+        return u.role !== 'admin' && u.id.toLowerCase() !== 'daily' && u.id !== '데일리';
+    }).length;
+
+    return {
+        users: users,
+        rooms: rooms,
+        maxClubAccounts: MAX_CLUB_ACCOUNTS,
+        clubAccountCount: clubAccountCount
+    };
 }
 
 function getBookings(params) {
@@ -180,7 +202,11 @@ function getBookings(params) {
                 u24M: parseInt(row[17]) || 0, u24F: parseInt(row[18]) || 0
             },
             participants: row[19] || "",
-            signature: row[20] || ""
+            signature: row[20] || "",
+            expectedHeadcount: parseInt(row[21]) || 0,
+            reportStatus: row[22] || "",
+            reportCompletedAt: row[23] || "",
+            reportUpdatedBy: row[24] || ""
         });
     }
     return sendResponse(bookings);
@@ -205,7 +231,8 @@ function createBooking(params) {
             sheet = ss.insertSheet("예약내역");
             sheet.appendRow([
                 "ID","User ID","Name","Date","Start Time","End Time","Room ID","Created At","Phone Number",
-                "활동내용","건의사항","초등남","초등여","중등남","중등여","고등남","고등여","24세이하남","24세이하여","참여자명단","대표자서명"
+                "활동내용","건의사항","초등남","초등여","중등남","중등여","고등남","고등여","24세이하남","24세이하여","참여자명단","대표자서명",
+                "예정 활동인원","활동일지 상태","활동일지 제출일시","최종 작성자"
             ]);
         }
 
@@ -215,6 +242,11 @@ function createBooking(params) {
         var duration = parseInt(params.duration || 0);
         var roomId = String(params.roomId || "").trim();
         var startTime = params.startTime;
+        var expectedHeadcount = parseInt(params.expectedHeadcount || 0);
+
+        if (!expectedHeadcount || expectedHeadcount < 1 || expectedHeadcount > 99) {
+            return sendResponse({ message: "예정 활동인원을 1~99명 사이로 입력해주세요." }, false);
+        }
 
         // 유저 권한 확인
         var config = getSheetConfig();
@@ -279,18 +311,15 @@ function createBooking(params) {
             roomId,
             createdAt,
             params.phoneNumber     || "",   // I
-            params.activityContent || "",   // J
-            params.suggestion      || "",   // K
-            parseInt(params.elemM  || 0),   // L
-            parseInt(params.elemF  || 0),   // M
-            parseInt(params.midM   || 0),   // N
-            parseInt(params.midF   || 0),   // O
-            parseInt(params.highM  || 0),   // P
-            parseInt(params.highF  || 0),   // Q
-            parseInt(params.u24M   || 0),   // R
-            parseInt(params.u24F   || 0),   // S
-            params.participants    || "",   // T ✅ 참여자명단
-            params.signature       || ""    // U ✅ 대표자 서명 Base64
+            "",                         // J 활동 후 작성
+            "",                         // K 활동 후 작성
+            0, 0, 0, 0, 0, 0, 0, 0,     // L~S 실제 참여자로 자동 계산
+            "",                         // T 활동 후 작성
+            "",                         // U 대표자 서명은 활동 후 작성
+            expectedHeadcount,           // V 예정 활동인원
+            "Pending",                  // W 활동일지 상태
+            "",                         // X 제출일시
+            ""                          // Y 최종 작성자
         ]);
 
         return sendResponse({
@@ -443,6 +472,126 @@ function updateBooking(params) {
 
     return sendResponse({ message: "Booking updated" });
 }
+
+function getMembers(params) {
+    var userId = String(params.userId || "").trim();
+    if (!userId) return sendResponse({ message: "동아리 계정ID가 필요합니다." }, false);
+
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName("Members");
+    if (!sheet) return sendResponse([]);
+
+    var data = sheet.getDataRange().getValues();
+    var members = [];
+    for (var i = 1; i < data.length; i++) {
+        if (String(data[i][0]).trim().toLowerCase() !== userId.toLowerCase()) continue;
+        if (String(data[i][5] || "Active") !== "Active") continue;
+        members.push({
+            clubUserId: String(data[i][0]),
+            memberId: String(data[i][1]),
+            name: String(data[i][2]),
+            schoolLevel: String(data[i][3]),
+            gender: String(data[i][4]),
+            status: String(data[i][5] || "Active")
+        });
+    }
+    return sendResponse(members);
+}
+
+function getPendingActivityReports(params) {
+    var userId = String(params.userId || "").trim();
+    if (!userId) return sendResponse({ message: "사용자 ID가 필요합니다." }, false);
+
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName("예약내역");
+    if (!sheet) return sendResponse([]);
+
+    var data = sheet.getDataRange().getValues();
+    var nowKey = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm");
+    var pending = [];
+    for (var i = 1; i < data.length; i++) {
+        var row = data[i];
+        if (String(row[1]).trim().toLowerCase() !== userId.toLowerCase()) continue;
+        if (String(row[22]).trim() !== "Pending") continue;
+
+        var date = formatDateSafe(row[3]);
+        var endTime = formatTimeSafe(row[5]);
+        var endKey = date + " " + endTime;
+        if (endKey > nowKey) continue;
+
+        pending.push({
+            id: row[0], userId: row[1], userName: row[2], date: date,
+            startTime: formatTimeSafe(row[4]), endTime: endTime, roomId: row[6],
+            createdAt: row[7], expectedHeadcount: parseInt(row[21]) || 0,
+            reportStatus: row[22]
+        });
+    }
+    pending.sort(function (a, b) {
+        return (a.date + " " + a.endTime).localeCompare(b.date + " " + b.endTime);
+    });
+    return sendResponse(pending);
+}
+
+function submitActivityLog(params) {
+    var bookingId = String(params.bookingId || "").trim();
+    var userId = String(params.userId || "").trim();
+    var activityContent = String(params.activityContent || "").trim();
+    var participants = String(params.participants || "").trim();
+
+    if (!bookingId || !userId) return sendResponse({ message: "예약 ID와 사용자 ID가 필요합니다." }, false);
+    if (activityContent.length < 15) return sendResponse({ message: "주요 활동 내용을 15자 이상 입력해주세요." }, false);
+    if (!participants) return sendResponse({ message: "실제 참여자를 1명 이상 입력해주세요." }, false);
+
+    var lock = LockService.getScriptLock();
+    try { lock.waitLock(30000); }
+    catch (e) { return sendResponse({ message: "서버가 바쁩니다. 잠시 후 다시 시도해주세요." }, false); }
+
+    try {
+        var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+        var sheet = ss.getSheetByName("예약내역");
+        if (!sheet) return sendResponse({ message: "예약내역 시트를 찾을 수 없습니다." }, false);
+
+        var config = getSheetConfig();
+        var writer = config.users.find(function (u) { return u.id.toLowerCase() === userId.toLowerCase(); });
+        var isAdmin = writer && writer.role === 'admin';
+        var data = sheet.getDataRange().getValues();
+
+        for (var i = 1; i < data.length; i++) {
+            var row = data[i];
+            if (String(row[0]).trim() !== bookingId) continue;
+            if (String(row[1]).trim().toLowerCase() !== userId.toLowerCase() && !isAdmin) {
+                return sendResponse({ message: "본인의 활동일지만 작성할 수 있습니다." }, false);
+            }
+            if (String(row[22]).trim() === "Completed" && !isAdmin) {
+                return sendResponse({ message: "이미 제출된 활동일지입니다." }, false);
+            }
+
+            var endKey = formatDateSafe(row[3]) + " " + formatTimeSafe(row[5]);
+            var nowKey = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm");
+            if (endKey > nowKey && !isAdmin) {
+                return sendResponse({ message: "활동 종료 후에 활동일지를 작성할 수 있습니다." }, false);
+            }
+
+            sheet.getRange(i + 1, 10, 1, 12).setValues([[
+                activityContent,
+                String(params.suggestion || "").trim(),
+                parseInt(params.elemM) || 0, parseInt(params.elemF) || 0,
+                parseInt(params.midM) || 0, parseInt(params.midF) || 0,
+                parseInt(params.highM) || 0, parseInt(params.highF) || 0,
+                parseInt(params.u24M) || 0, parseInt(params.u24F) || 0,
+                participants,
+                String(params.signature || "")
+            ]]);
+            var completedAt = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss");
+            sheet.getRange(i + 1, 23, 1, 3).setValues([["Completed", completedAt, userId]]);
+            return sendResponse({ message: "활동일지가 저장되었습니다.", completedAt: completedAt });
+        }
+        return sendResponse({ message: "예약을 찾을 수 없습니다." }, false);
+    } finally {
+        lock.releaseLock();
+    }
+}
+
 function getNotices() {
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     var sheet = ss.getSheetByName("Notices");

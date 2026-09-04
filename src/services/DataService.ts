@@ -1,4 +1,4 @@
-import type { Booking, User, Room, Notice } from '../types';
+import type { Booking, User, Room, Notice, ClubMember } from '../types';
 
 export interface BookingRequest {
     userId: string;
@@ -7,16 +7,7 @@ export interface BookingRequest {
     startTime: string;
     duration: number;
     phoneNumber?: string;
-    activityContent?: string;
-    suggestion?: string;
-    headcount?: {
-        elemM: number; elemF: number;
-        midM: number;  midF: number;
-        highM: number; highF: number;
-        u24M: number;  u24F: number;
-    };
-    participants?: string[]; // ✅ 참여자 이름 목록
-    signature?: string;
+    expectedHeadcount: number;
 }
 
 const getApiUrl = () => {
@@ -31,9 +22,27 @@ export interface DataService {
     getAllBookings(): Promise<Booking[]>;
     createBooking(request: BookingRequest): Promise<Booking>;
     getUserBookings(userId: string): Promise<Booking[]>;
+    getPendingActivityReports(userId: string): Promise<Booking[]>;
+    getMembers(userId: string): Promise<ClubMember[]>;
+    submitActivityReport(data: ActivityReportRequest): Promise<void>;
 }
 
-export interface Config { users: User[]; rooms: Room[]; }
+export interface Config { users: User[]; rooms: Room[]; maxClubAccounts?: number; clubAccountCount?: number; }
+
+export interface ActivityReportRequest {
+    bookingId: string;
+    userId: string;
+    activityContent: string;
+    suggestion: string;
+    headcount: {
+        elemM: number; elemF: number;
+        midM: number; midF: number;
+        highM: number; highF: number;
+        u24M: number; u24F: number;
+    };
+    participants: string[];
+    signature: string;
+}
 
 let configCache: Config | null = null;
 
@@ -100,19 +109,7 @@ export class ApiDataService implements DataService {
             startTime:       request.startTime,
             duration:        request.duration,
             phoneNumber:     request.phoneNumber     ?? "",
-            activityContent: request.activityContent ?? "",
-            suggestion:      request.suggestion      ?? "",
-            elemM:  request.headcount?.elemM  ?? 0,
-            elemF:  request.headcount?.elemF  ?? 0,
-            midM:   request.headcount?.midM   ?? 0,
-            midF:   request.headcount?.midF   ?? 0,
-            highM:  request.headcount?.highM  ?? 0,
-            highF:  request.headcount?.highF  ?? 0,
-            u24M:   request.headcount?.u24M   ?? 0,
-            u24F:   request.headcount?.u24F   ?? 0,
-            // ✅ 참여자 이름을 콤마 구분 문자열로 전송
-            participants: (request.participants ?? []).join(', '),
-            signature: request.signature ?? "",
+            expectedHeadcount: request.expectedHeadcount,
         };
 
         try {
@@ -127,6 +124,41 @@ export class ApiDataService implements DataService {
         } catch (error: any) {
             throw new Error(error.message || "Network error");
         }
+    }
+
+    async getPendingActivityReports(userId: string): Promise<Booking[]> {
+        const url = getApiUrl();
+        if (!url) return [];
+        const response = await fetch(`${url}?method=GET_PENDING_REPORTS&userId=${encodeURIComponent(userId)}`);
+        const json = await response.json();
+        if (json.status !== 'success') throw new Error(json.message || '활동일지 대기 목록을 불러오지 못했습니다.');
+        return json.data;
+    }
+
+    async getMembers(userId: string): Promise<ClubMember[]> {
+        const url = getApiUrl();
+        if (!url) return [];
+        const response = await fetch(`${url}?method=GET_MEMBERS&userId=${encodeURIComponent(userId)}`);
+        const json = await response.json();
+        if (json.status !== 'success') throw new Error(json.message || '회원 명단을 불러오지 못했습니다.');
+        return json.data;
+    }
+
+    async submitActivityReport(data: ActivityReportRequest): Promise<void> {
+        const url = getApiUrl();
+        if (!url) throw new Error('API configuration missing');
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({
+                method: 'SUBMIT_ACTIVITY_LOG',
+                ...data,
+                participants: data.participants.join(', '),
+                ...data.headcount,
+            }),
+        });
+        const json = await response.json();
+        if (json.status !== 'success') throw new Error(json.message || '활동일지 저장에 실패했습니다.');
     }
 
     async getNotices(): Promise<Notice[]> {

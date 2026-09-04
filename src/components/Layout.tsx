@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { LogOut, User, Music, Bell, MessageCircle, FileText } from 'lucide-react';
+import { PendingActivityReports } from './PendingActivityReports';
 
 interface LayoutProps {
     children: ReactNode;
@@ -93,6 +94,7 @@ export function Layout({ children }: LayoutProps) {
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
                 {children}
             </main>
+            <PendingActivityReports />
         </div>
     );
 }

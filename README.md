@@ -1,5 +1,17 @@
 # React + TypeScript + Vite
 
+## 활동일지 2단계 흐름
+
+- 예약 시에는 예정 활동인원만 필수로 저장하고 `Pending` 상태로 시작합니다.
+- 활동 종료 후 다음 로그인 시 미작성 활동일지가 팝업으로 표시됩니다.
+- `Members` 시트에서 로그인한 동아리의 `Active` 회원만 참여자로 선택할 수 있습니다.
+- 선택한 회원의 학교급과 성별로 인원 현황을 자동 계산합니다.
+- 동아리 계정은 관리자와 데일리 계정을 제외하고 최대 40개를 기준으로 사용합니다.
+
+### Google Apps Script 배포
+
+`GAS_FINAL_DEPLOY.js`를 Apps Script 프로젝트에 반영한 뒤 새 버전으로 웹 앱을 배포해야 새 API가 작동합니다.
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:
