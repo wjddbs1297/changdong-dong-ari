@@ -16,10 +16,10 @@
 
 1. Apps Script를 새 버전으로 배포합니다.
 2. Apps Script 편집기에서 `generateInitialPinsFromEditor`를 한 번 실행합니다.
-3. 실행 로그에 출력된 계정별 임시 PIN을 안전하게 전달합니다.
-4. 첫 로그인에서 각 계정이 새 PIN으로 반드시 변경합니다.
+3. PIN이 아직 없는 모든 계정의 초기 PIN이 `0000`으로 설정됩니다.
+4. 첫 로그인에서 각 계정이 `0000`이 아닌 새 PIN으로 반드시 변경합니다.
 
-PIN 원문은 시트와 GitHub에 저장하지 않으며, PIN이 없는 계정만 초기 발급 대상입니다. 로그인은 5회 실패 시 15분 잠금되고 세션은 2시간 동안 유지됩니다.
+초기 PIN `0000`도 시트에는 해시로 저장되며, PIN이 없는 계정만 초기 설정 대상입니다. 로그인은 5회 실패 시 15분 잠금되고 세션은 2시간 동안 유지됩니다.
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 

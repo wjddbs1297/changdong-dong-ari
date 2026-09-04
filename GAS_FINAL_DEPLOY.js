@@ -101,8 +101,9 @@ function loginWithPin(params) {
     return sendResponse(createSession(record));
 }
 
-function setPinForRecord(record, pin, mustChange) {
-    if (!isValidPin(pin)) throw new Error("PIN은 쉬운 번호를 제외한 4자리 숫자여야 합니다.");
+function setPinForRecord(record, pin, mustChange, allowTemporaryPin) {
+    var isTemporaryPin = allowTemporaryPin === true && String(pin) === "0000";
+    if (!isTemporaryPin && !isValidPin(pin)) throw new Error("PIN은 쉬운 번호를 제외한 4자리 숫자여야 합니다.");
     var salt = Utilities.getUuid();
     record.sheet.getRange(record.rowNumber, 5, 1, 5).setValues([[salt, hashPin(pin, salt), mustChange === true, 0, ""]]);
 }
@@ -111,27 +112,23 @@ function setPinForRecord(record, pin, mustChange) {
 function setInitialPinFromEditor(userId, pin) {
     var record = findUserRecord(userId);
     if (!record) throw new Error("계정을 찾을 수 없습니다.");
-    setPinForRecord(record, String(pin), true);
+    setPinForRecord(record, String(pin), true, true);
 }
 
-// PIN이 없는 계정에만 서로 다른 임시 PIN을 발급하고 실행 로그에 1회 출력합니다.
+// PIN이 없는 계정의 초기 PIN을 0000으로 통일합니다.
 function generateInitialPinsFromEditor() {
     var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName("Users");
     if (!sheet) throw new Error("Users 시트를 찾을 수 없습니다.");
     var data = sheet.getDataRange().getValues();
     var issued = [];
-    var usedPins = {};
     for (var i = 1; i < data.length; i++) {
         if (!data[i][0] || data[i][5]) continue;
-        var pin;
-        do { pin = String(Math.floor(1000 + Math.random() * 9000)); }
-        while (!isValidPin(pin) || usedPins[pin]);
-        usedPins[pin] = true;
+        var pin = "0000";
         var record = { sheet: sheet, rowNumber: i + 1, row: data[i] };
-        setPinForRecord(record, pin, true);
+        setPinForRecord(record, pin, true, true);
         issued.push({ userId: String(data[i][0]), name: String(data[i][1]), temporaryPin: pin });
     }
-    console.log(JSON.stringify(issued));
+    console.log("초기 PIN 0000 설정 완료: " + issued.length + "개 계정");
     return issued;
 }
 
