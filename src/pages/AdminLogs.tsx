@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { Printer } from 'lucide-react';
+import { FileDown, Printer } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { dataService } from '../services/DataService';
-import { printActivityLog } from '../components/ActivityModal';
+import { downloadActivityLogPdf, printActivityLog } from '../components/ActivityModal';
+import type { ActivityLogData } from '../components/ActivityModal';
 import type { Booking, Room, User } from '../types';
 
 const CLUB_ID_ALIASES: Record<string, string> = {
@@ -32,6 +33,7 @@ export function AdminLogs() {
     const [loading, setLoading] = useState(true);
     const [clubFilter, setClubFilter] = useState('all');
     const [monthFilter, setMonthFilter] = useState('all');
+    const [pdfBookingKey, setPdfBookingKey] = useState('');
 
     useEffect(() => {
         if (user?.role !== 'admin') return;
@@ -108,9 +110,9 @@ export function AdminLogs() {
         });
     }, [bookings, clubFilter, monthFilter]);
 
-    const handlePrint = (booking: Booking) => {
+    const getActivityLogData = (booking: Booking): ActivityLogData => {
         const today = format(new Date(), 'yyyy. MM. dd', { locale: ko });
-        printActivityLog({
+        return {
             roomName: getRoomName(booking.roomId),
             dateStr: booking.date,
             timeStr: `${booking.startTime} ~ ${booking.endTime}`,
@@ -121,7 +123,24 @@ export function AdminLogs() {
             participants: (booking.participants || '').split(',').map(p=>p.trim()).filter(Boolean),
             signature: booking.signature || '',
             today
-        });
+        };
+    };
+
+    const handlePrint = (booking: Booking) => {
+        printActivityLog(getActivityLogData(booking));
+    };
+
+    const handlePdfDownload = async (booking: Booking) => {
+        const bookingKey = `${booking.id}-${booking.date}-${booking.startTime}`;
+        setPdfBookingKey(bookingKey);
+        try {
+            await downloadActivityLogPdf(getActivityLogData(booking));
+        } catch (error) {
+            console.error(error);
+            alert('PDF 저장 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+        } finally {
+            setPdfBookingKey('');
+        }
     };
 
     if (user?.role !== 'admin') {
@@ -189,7 +208,7 @@ export function AdminLogs() {
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">연습실</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">신청자</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">상태</th>
-                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">출력</th>
+                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">출력·저장</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
@@ -198,6 +217,8 @@ export function AdminLogs() {
                                         const hasLog = !!(b.activityContent && b.activityContent.trim());
                                         const hasSig = !!b.signature;
                                         const highlighted = (clubFilter !== 'all' || monthFilter !== 'all') && matchesSelection(b);
+                                        const bookingKey = `${b.id}-${b.date}-${b.startTime}`;
+                                        const isPdfSaving = pdfBookingKey === bookingKey;
                                         return (
                                             <tr key={`${b.id}-${b.date}-${b.startTime}-${b.endTime}-${b.roomId}-${b.userId}-${index}`} className={`transition-colors ${highlighted ? 'bg-brand-50 ring-1 ring-inset ring-brand-100' : 'hover:bg-gray-50'}`}>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -220,18 +241,32 @@ export function AdminLogs() {
                                                     ) : (<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">미제출</span>)}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                    <button
-                                                        onClick={() => handlePrint(b)}
-                                                        disabled={!hasLog}
-                                                        className={`inline-flex items-center space-x-1 px-3 py-1.5 rounded-md text-sm ${
-                                                            hasLog 
-                                                                ? 'bg-brand-50 text-brand-700 hover:bg-brand-100' 
-                                                                : 'bg-gray-50 text-gray-400 cursor-not-allowed opacity-50'
-                                                        }`}
-                                                    >
-                                                        <Printer size={16} />
-                                                        <span>인쇄</span>
-                                                    </button>
+                                                    <div className="inline-flex items-center gap-2">
+                                                        <button
+                                                            onClick={() => handlePrint(b)}
+                                                            disabled={!hasLog}
+                                                            className={`inline-flex items-center space-x-1 px-3 py-1.5 rounded-md text-sm ${
+                                                                hasLog
+                                                                    ? 'bg-brand-50 text-brand-700 hover:bg-brand-100'
+                                                                    : 'bg-gray-50 text-gray-400 cursor-not-allowed opacity-50'
+                                                            }`}
+                                                        >
+                                                            <Printer size={16} />
+                                                            <span>인쇄</span>
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handlePdfDownload(b)}
+                                                            disabled={!hasLog || isPdfSaving}
+                                                            className={`inline-flex items-center space-x-1 rounded-md px-3 py-1.5 text-sm ${
+                                                                hasLog
+                                                                    ? 'bg-red-50 text-red-700 hover:bg-red-100'
+                                                                    : 'cursor-not-allowed bg-gray-50 text-gray-400 opacity-50'
+                                                            }`}
+                                                        >
+                                                            <FileDown size={16} />
+                                                            <span>{isPdfSaving ? '저장 중...' : 'PDF 저장'}</span>
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         );

@@ -134,8 +134,7 @@ function SignaturePad({ canvasRef }: { canvasRef: React.RefObject<HTMLCanvasElem
 }
 
 
-// ── PDF 인쇄 컴포넌트 ─────────────────────────────────────
-export function printActivityLog(data: {
+export interface ActivityLogData {
     roomName: string;
     dateStr: string;
     timeStr: string;
@@ -146,7 +145,10 @@ export function printActivityLog(data: {
     participants: string[];
     signature: string;
     today: string;
-}) {
+}
+
+// ── PDF/인쇄 문서 생성 ────────────────────────────────────
+function buildActivityLogHtml(data: ActivityLogData, autoPrint: boolean) {
     const totalCount = Object.values(data.headcount).reduce((s,v)=>s+v,0);
     const rows = [
         { label: '초등', m: data.headcount.elemM, f: data.headcount.elemF },
@@ -292,14 +294,80 @@ export function printActivityLog(data: {
   </div>
   <div class="auto-note">이 문서는 창동청소년센터 대관 예약 시스템에서 자동 생성되었습니다.</div>
 
-  <script>window.onload = () => window.print();</script>
+  ${autoPrint ? '<script>window.onload = () => window.print();</script>' : ''}
 </body>
 </html>`;
+
+    return html;
+}
+
+export function printActivityLog(data: ActivityLogData) {
+    const html = buildActivityLogHtml(data, true);
 
     const win = window.open('', '_blank');
     if (!win) return;
     win.document.write(html);
     win.document.close();
+}
+
+export async function downloadActivityLogPdf(data: ActivityLogData) {
+    const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+    ]);
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('aria-hidden', 'true');
+    Object.assign(iframe.style, {
+        position: 'fixed',
+        left: '-10000px',
+        top: '0',
+        width: '794px',
+        height: '1123px',
+        border: '0',
+        pointerEvents: 'none',
+    });
+    document.body.appendChild(iframe);
+
+    try {
+        await new Promise<void>((resolve, reject) => {
+            iframe.onload = () => resolve();
+            iframe.onerror = () => reject(new Error('PDF 문서를 준비하지 못했습니다.'));
+            iframe.srcdoc = buildActivityLogHtml(data, false);
+        });
+
+        const iframeDocument = iframe.contentDocument;
+        if (!iframeDocument) throw new Error('PDF 문서를 불러오지 못했습니다.');
+
+        await iframeDocument.fonts?.ready;
+        await Promise.all([...iframeDocument.images].map(image => {
+            if (image.complete) return Promise.resolve();
+            return new Promise<void>(resolve => {
+                image.onload = () => resolve();
+                image.onerror = () => resolve();
+            });
+        }));
+
+        const canvas = await html2canvas(iframeDocument.body, {
+            scale: 2,
+            backgroundColor: '#ffffff',
+            logging: false,
+            useCORS: true,
+            windowWidth: 794,
+        });
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        const maxWidth = 180;
+        const maxHeight = 267;
+        const scale = Math.min(maxWidth / canvas.width, maxHeight / canvas.height);
+        const width = canvas.width * scale;
+        const height = canvas.height * scale;
+        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', (210 - width) / 2, 15, width, height);
+
+        const filename = `${data.dateStr}_${data.userName}_활동일지`
+            .replace(/[\\/:*?"<>|]/g, '_');
+        pdf.save(`${filename}.pdf`);
+    } finally {
+        iframe.remove();
+    }
 }
 
 // ── 메인 모달 ────────────────────────────────────────────
