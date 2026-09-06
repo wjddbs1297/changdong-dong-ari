@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { dataService } from '../services/DataService';
 import type { Booking, HolidayInfo, Room, User } from '../types';
 
-type PeriodMode = 'month' | 'quarter' | 'year';
+type PeriodMode = 'week' | 'month' | 'quarter' | 'year';
 type Basis = 'ended' | 'completed';
 type SlotKey = 'weekdayMorning' | 'weekdayAfternoon' | 'saturdayMorning' | 'saturdayAfternoon' | 'holidayMorning' | 'holidayAfternoon';
 
@@ -35,6 +35,23 @@ const EMPTY_CELLS = (): Record<SlotKey, StatCell> => ({
 const isDaily = (value: string) => ['daily', '데일리'].includes(value.trim().toLowerCase());
 const parseHour = (value: string) => Number(String(value || '').split(':')[0]);
 const bookingHours = (booking: Booking) => Math.max(0, parseHour(booking.endTime) - parseHour(booking.startTime));
+const dateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+function weekRange(anchor: string) {
+    const parsed = new Date(`${anchor}T12:00:00`);
+    const date = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+    const monday = new Date(date);
+    monday.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    return { start: dateKey(monday), end: dateKey(sunday) };
+}
+
+function moveWeek(anchor: string, amount: number) {
+    const parsed = new Date(`${anchor}T12:00:00`);
+    parsed.setDate(parsed.getDate() + amount * 7);
+    return dateKey(parsed);
+}
 
 function bookingGenderCounts(booking: Booking) {
     if (!isCompleted(booking) || !booking.headcount) return { male: 0, female: 0 };
@@ -53,9 +70,11 @@ function isCompleted(booking: Booking) {
     return booking.reportStatus === 'Completed' || !!booking.activityContent?.trim();
 }
 
-function isInPeriod(date: string, mode: PeriodMode, year: number, month: number, quarter: number) {
+function isInPeriod(date: string, mode: PeriodMode, year: number, month: number, quarter: number, weekStart: string, weekEnd: string) {
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
-    if (!match || Number(match[1]) !== year) return false;
+    if (!match) return false;
+    if (mode === 'week') return date >= weekStart && date <= weekEnd;
+    if (Number(match[1]) !== year) return false;
     const bookingMonth = Number(match[2]);
     if (mode === 'month') return bookingMonth === month;
     if (mode === 'quarter') return Math.ceil(bookingMonth / 3) === quarter;
@@ -71,7 +90,8 @@ function slotFor(booking: Booking, holidayDates: Set<string>): SlotKey {
     return `weekday${time}` as SlotKey;
 }
 
-function periodLabel(mode: PeriodMode, year: number, month: number, quarter: number) {
+function periodLabel(mode: PeriodMode, year: number, month: number, quarter: number, weekStart: string, weekEnd: string) {
+    if (mode === 'week') return `${weekStart.replace(/-/g, '.')} ~ ${weekEnd.replace(/-/g, '.')}`;
     if (mode === 'month') return `${year}년 ${month}월`;
     if (mode === 'quarter') return `${year}년 ${quarter}분기`;
     return `${year}년`;
@@ -93,7 +113,9 @@ export function AdminStats() {
     const [year, setYear] = useState(now.getFullYear());
     const [month, setMonth] = useState(now.getMonth() + 1);
     const [quarter, setQuarter] = useState(Math.floor(now.getMonth() / 3) + 1);
+    const [weekDate, setWeekDate] = useState(dateKey(now));
     const [selected, setSelected] = useState<{ row: StatRow; key: SlotKey; label: string } | null>(null);
+    const selectedWeek = useMemo(() => weekRange(weekDate), [weekDate]);
 
     useEffect(() => {
         if (user?.role !== 'admin') return;
@@ -110,7 +132,8 @@ export function AdminStats() {
 
     useEffect(() => {
         if (user?.role !== 'admin') return;
-        dataService.getPerformanceData({ mode, year, month, quarter, basis }).then(result => {
+        setLoading(true);
+        dataService.getPerformanceData({ mode, year, month, quarter, weekStart: selectedWeek.start, weekEnd: selectedWeek.end, basis }).then(result => {
             setBookings(result.bookings);
             setHolidays(result.holidays);
             setAvailableYears(result.availableYears);
@@ -122,7 +145,7 @@ export function AdminStats() {
             setHolidays([]);
             setLoadError(error instanceof Error ? error.message : '이용 실적을 불러오지 못했습니다.');
         }).finally(() => setLoading(false));
-    }, [user, mode, year, month, quarter, basis]);
+    }, [user, mode, year, month, quarter, selectedWeek.start, selectedWeek.end, basis]);
 
     const years = [...new Set<number>([now.getFullYear(), ...availableYears])].sort((a, b) => b - a);
 
@@ -141,7 +164,7 @@ export function AdminStats() {
         const byId = new Map(result.map(item => [item.userId.trim().toLowerCase(), item]));
 
         bookings.forEach(booking => {
-            if (!isInPeriod(booking.date, mode, year, month, quarter) || !hasEnded(booking)) return;
+            if (!isInPeriod(booking.date, mode, year, month, quarter, selectedWeek.start, selectedWeek.end) || !hasEnded(booking)) return;
             if (basis === 'completed' && !isCompleted(booking)) return;
             const row = byId.get(booking.userId.trim().toLowerCase());
             if (!row) return;
@@ -157,7 +180,7 @@ export function AdminStats() {
             row.participants += genderCounts.male + genderCounts.female;
         });
         return result;
-    }, [users, bookings, holidayDates, mode, year, month, quarter, basis]);
+    }, [users, bookings, holidayDates, mode, year, month, quarter, selectedWeek.start, selectedWeek.end, basis]);
 
     const totals = useMemo(() => rows.reduce((acc, row) => ({
         clubs: acc.clubs + (row.totalVisits > 0 ? 1 : 0),
@@ -188,19 +211,26 @@ export function AdminStats() {
                     <div>
                         <div className="mb-2 flex items-center gap-2 text-brand-700"><BarChart3 size={22} /><span className="text-sm font-bold">관리자 전용</span></div>
                         <h1 className="text-2xl font-bold text-gray-900">동아리 이용 실적</h1>
-                        <p className="mt-2 text-sm text-gray-500">{periodLabel(mode, year, month, quarter)} 종료 예약을 시간대별로 집계합니다.</p>
+                        <p className="mt-2 text-sm text-gray-500">{periodLabel(mode, year, month, quarter, selectedWeek.start, selectedWeek.end)} 종료 예약을 시간대별로 집계합니다.</p>
                     </div>
                     <div className="flex flex-wrap items-end gap-3">
                         <label className="text-xs font-semibold text-gray-500">기간 단위
                             <select value={mode} onChange={e => { setMode(e.target.value as PeriodMode); setSelected(null); }} className="mt-1 block rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900">
-                                <option value="month">월별</option><option value="quarter">분기별</option><option value="year">연도별</option>
+                                <option value="week">주별</option><option value="month">월별</option><option value="quarter">분기별</option><option value="year">연도별</option>
                             </select>
                         </label>
-                        <label className="text-xs font-semibold text-gray-500">연도
+                        {mode !== 'week' && <label className="text-xs font-semibold text-gray-500">연도
                             <select value={year} onChange={e => { setYear(Number(e.target.value)); setSelected(null); }} className="mt-1 block rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900">
                                 {years.map(item => <option key={item} value={item}>{item}년</option>)}
                             </select>
-                        </label>
+                        </label>}
+                        {mode === 'week' && <div className="text-xs font-semibold text-gray-500">기준일
+                            <div className="mt-1 flex items-center gap-1">
+                                <button type="button" onClick={() => { setWeekDate(value => moveWeek(value, -1)); setSelected(null); }} className="rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-sm text-gray-600 hover:bg-gray-50">이전 주</button>
+                                <input type="date" value={weekDate} onChange={e => { setWeekDate(e.target.value); setSelected(null); }} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-normal text-gray-900" />
+                                <button type="button" onClick={() => { setWeekDate(value => moveWeek(value, 1)); setSelected(null); }} className="rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-sm text-gray-600 hover:bg-gray-50">다음 주</button>
+                            </div>
+                        </div>}
                         {mode === 'month' && <label className="text-xs font-semibold text-gray-500">월
                             <select value={month} onChange={e => { setMonth(Number(e.target.value)); setSelected(null); }} className="mt-1 block rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900">
                                 {Array.from({ length: 12 }, (_, i) => i + 1).map(item => <option key={item} value={item}>{item}월</option>)}
@@ -267,7 +297,7 @@ export function AdminStats() {
             </section>
 
             {selected && <section className="rounded-2xl border border-brand-100 bg-white p-6 shadow-sm">
-                <div className="flex items-start justify-between gap-4"><div><h2 className="text-lg font-bold text-gray-900">{selected.row.name} · {selected.label}</h2><p className="mt-1 text-sm text-gray-500">{periodLabel(mode, year, month, quarter)} 이용 내역</p></div><button onClick={() => setSelected(null)} className="rounded-lg px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100">닫기</button></div>
+                <div className="flex items-start justify-between gap-4"><div><h2 className="text-lg font-bold text-gray-900">{selected.row.name} · {selected.label}</h2><p className="mt-1 text-sm text-gray-500">{periodLabel(mode, year, month, quarter, selectedWeek.start, selectedWeek.end)} 이용 내역</p></div><button onClick={() => setSelected(null)} className="rounded-lg px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100">닫기</button></div>
                 <div className="mt-4 divide-y divide-gray-100 rounded-xl border border-gray-100">
                     {[...selected.row.cells[selected.key].visits].sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime)).map(booking => {
                         const genderCounts = bookingGenderCounts(booking);

@@ -57,10 +57,12 @@ export interface HolidayCalendarResult {
 }
 
 export interface PerformanceQuery {
-    mode: 'month' | 'quarter' | 'year';
+    mode: 'week' | 'month' | 'quarter' | 'year';
     year: number;
     month: number;
     quarter: number;
+    weekStart?: string;
+    weekEnd?: string;
     basis: 'ended' | 'completed';
 }
 
