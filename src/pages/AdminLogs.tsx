@@ -58,11 +58,23 @@ export function AdminLogs() {
             .sort((a, b) => b.localeCompare(a));
     }, [bookings]);
 
-    const filteredBookings = useMemo(() => {
-        return bookings.filter(booking => {
+    const matchesSelection = (booking: Booking) => {
             const matchesClub = clubFilter === 'all' || booking.userId === clubFilter;
             const matchesMonth = monthFilter === 'all' || booking.date.startsWith(monthFilter);
             return matchesClub && matchesMonth;
+    };
+
+    const matchingBookings = useMemo(() => {
+        return bookings.filter(matchesSelection);
+    }, [bookings, clubFilter, monthFilter]);
+
+    const sortedBookings = useMemo(() => {
+        const hasSelection = clubFilter !== 'all' || monthFilter !== 'all';
+        if (!hasSelection) return bookings;
+        return [...bookings].sort((a, b) => {
+            const priority = Number(matchesSelection(b)) - Number(matchesSelection(a));
+            if (priority !== 0) return priority;
+            return b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime);
         });
     }, [bookings, clubFilter, monthFilter]);
 
@@ -120,7 +132,7 @@ export function AdminLogs() {
                         </select>
                     </label>
                     <div className="flex items-center justify-between gap-3 sm:min-w-44 sm:flex-col sm:items-end">
-                        <span className="text-sm text-gray-500">조회 결과 <strong className="text-gray-900">{filteredBookings.length}건</strong></span>
+                        <span className="text-sm text-gray-500">일치 기록 <strong className="text-gray-900">{matchingBookings.length}건</strong></span>
                         <button
                             type="button"
                             onClick={() => { setClubFilter('all'); setMonthFilter('all'); }}
@@ -131,6 +143,9 @@ export function AdminLogs() {
                         </button>
                     </div>
                 </div>
+                {(clubFilter !== 'all' || monthFilter !== 'all') && (
+                    <p className="mb-4 text-sm text-brand-700">선택한 조건의 활동일지를 표 맨 위로 정렬했습니다.</p>
+                )}
                 
                 {loading ? (
                     <div className="text-center text-gray-500 py-10">데이터를 불러오는 중...</div>
@@ -148,12 +163,13 @@ export function AdminLogs() {
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
-                                {filteredBookings.length > 0 ? (
-                                    filteredBookings.map(b => {
+                                {sortedBookings.length > 0 ? (
+                                    sortedBookings.map(b => {
                                         const hasLog = !!(b.activityContent && b.activityContent.trim());
                                         const hasSig = !!b.signature;
+                                        const highlighted = (clubFilter !== 'all' || monthFilter !== 'all') && matchesSelection(b);
                                         return (
-                                            <tr key={b.id} className="hover:bg-gray-50 transition-colors">
+                                            <tr key={b.id} className={`transition-colors ${highlighted ? 'bg-brand-50 ring-1 ring-inset ring-brand-100' : 'hover:bg-gray-50'}`}>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                                     {b.date}
                                                 </td>
@@ -193,7 +209,7 @@ export function AdminLogs() {
                                 ) : (
                                     <tr>
                                         <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
-                                            선택한 조건에 해당하는 기록이 없습니다.
+                                            저장된 기록이 없습니다.
                                         </td>
                                     </tr>
                                 )}
