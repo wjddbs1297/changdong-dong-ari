@@ -5,12 +5,30 @@ import { Printer } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { dataService } from '../services/DataService';
 import { printActivityLog } from '../components/ActivityModal';
-import type { Booking, Room } from '../types';
+import type { Booking, Room, User } from '../types';
+
+const CLUB_ID_ALIASES: Record<string, string> = {
+    'ing': '-ing',
+    '-ing': '-ing',
+    'able': 'able2026',
+    '에이블': 'able2026',
+};
+
+const normalizeClubId = (value: string) => {
+    const normalized = value.trim().toLocaleLowerCase('ko-KR');
+    return CLUB_ID_ALIASES[normalized] || normalized;
+};
+
+const isNonClubAccount = (account: User) => {
+    const id = account.id.trim().toLocaleLowerCase('ko-KR');
+    return account.role === 'admin' || ['daily', '데일리', 'test'].includes(id);
+};
 
 export function AdminLogs() {
     const { user } = useAuth();
     const [bookings, setBookings] = useState<Booking[]>([]);
     const [rooms, setRooms] = useState<Room[]>([]);
+    const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
     const [clubFilter, setClubFilter] = useState('all');
     const [monthFilter, setMonthFilter] = useState('all');
@@ -23,6 +41,7 @@ export function AdminLogs() {
             try {
                 const config = await dataService.getConfig();
                 setRooms(config.rooms);
+                setUsers(config.users);
                 
                 const allData = await dataService.getAllBookings();
                 // Sort by date descending (newest first)
@@ -39,16 +58,28 @@ export function AdminLogs() {
     }, [user]);
 
     const getRoomName = (roomId: string) => rooms.find(r => r.id === roomId)?.name || roomId;
-    const getClubName = (booking: Booking) => String(booking.userName || booking.userId || '').trim();
 
     const clubOptions = useMemo(() => {
-        const clubs = new Set<string>();
-        bookings.forEach(booking => {
-            const name = getClubName(booking);
-            if (name) clubs.add(name);
+        return users
+            .filter(account => account.status === 'Active' && !isNonClubAccount(account))
+            .map(account => ({ id: normalizeClubId(account.id), name: account.name || account.id }))
+            .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+    }, [users]);
+
+    const clubIdLookup = useMemo(() => {
+        const lookup = new Map<string, string>();
+        clubOptions.forEach(club => {
+            lookup.set(normalizeClubId(club.id), club.id);
+            lookup.set(normalizeClubId(club.name), club.id);
         });
-        return [...clubs].sort((a, b) => a.localeCompare(b, 'ko'));
-    }, [bookings]);
+        return lookup;
+    }, [clubOptions]);
+
+    const getBookingClubId = (booking: Booking) => {
+        const userId = normalizeClubId(String(booking.userId || ''));
+        const userName = normalizeClubId(String(booking.userName || ''));
+        return clubIdLookup.get(userId) || clubIdLookup.get(userName) || userId;
+    };
 
     const monthOptions = useMemo(() => {
         return [...new Set(bookings
@@ -58,7 +89,7 @@ export function AdminLogs() {
     }, [bookings]);
 
     const matchesSelection = (booking: Booking) => {
-            const matchesClub = clubFilter === 'all' || getClubName(booking) === clubFilter;
+            const matchesClub = clubFilter === 'all' || getBookingClubId(booking) === clubFilter;
             const matchesMonth = monthFilter === 'all' || booking.date.startsWith(monthFilter);
             return matchesClub && matchesMonth;
     };
@@ -112,7 +143,7 @@ export function AdminLogs() {
                         >
                             <option value="all">전체 동아리</option>
                             {clubOptions.map(club => (
-                                <option key={club} value={club}>{club}</option>
+                                <option key={club.id} value={club.id}>{club.name}</option>
                             ))}
                         </select>
                     </label>
