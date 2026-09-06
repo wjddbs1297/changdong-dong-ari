@@ -57,6 +57,11 @@ export interface ClubMember {
     status: 'Active' | 'Inactive';
 }
 
+export interface HolidayInfo {
+    date: string;
+    name: string;
+}
+
 export interface Notice {
     id: string;
     title: string;

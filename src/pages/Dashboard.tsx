@@ -4,6 +4,7 @@ import { ko } from 'date-fns/locale';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Check } from 'lucide-react';
 import type { Room, Booking, User, Notice } from '../types';
 import { dataService } from '../services/DataService';
+import type { HolidayCalendarResult } from '../services/DataService';
 import { useAuth } from '../contexts/AuthContext';
 import { PhoneInputModal } from '../components/PhoneInputModal';
 import { printActivityLog } from '../components/ActivityModal';
@@ -23,10 +24,19 @@ export function Dashboard() {
     const [userPhoneNumber, setUserPhoneNumber] = useState<string>('');
     const [isHeadcountModalOpen, setIsHeadcountModalOpen] = useState(false);
     const [pendingPhoneNumber, setPendingPhoneNumber] = useState<string | undefined>(undefined);
+    const [holidayYears, setHolidayYears] = useState<Record<number, HolidayCalendarResult>>({});
+    const [holidayWarning, setHolidayWarning] = useState('');
 
     const isSun = isSunday(selectedDate);
-    const START_HOUR = isSun ? 10 : 9;
-    const END_HOUR = isSun ? 17 : 21;
+    const selectedDateKey = format(selectedDate, 'yyyy-MM-dd');
+    const selectedYear = selectedDate.getFullYear();
+    const selectedYearHolidays = holidayYears[selectedYear];
+    const holidayYearLoaded = Object.prototype.hasOwnProperty.call(holidayYears, selectedYear);
+    const selectedHoliday = selectedYearHolidays?.holidays.find(item => item.date === selectedDateKey);
+    const isClosedHoliday = !!selectedHoliday && /설날|추석|Lunar New Year|Korean New Year|Chuseok/i.test(selectedHoliday.name);
+    const isHolidaySchedule = isSun || !!selectedHoliday;
+    const START_HOUR = isHolidaySchedule ? 10 : 9;
+    const END_HOUR = isHolidaySchedule ? 17 : 21;
     const HOURS = Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i);
 
     useEffect(() => {
@@ -42,6 +52,18 @@ export function Dashboard() {
         };
         init();
     }, []);
+
+    useEffect(() => {
+        if (holidayYears[selectedYear]) return;
+        dataService.getHolidays([selectedYear]).then(result => {
+            setHolidayYears(current => ({ ...current, [selectedYear]: result }));
+            setHolidayWarning(result.available ? '' : '공휴일 정보를 불러오지 못했습니다. 일요일 운영시간만 적용됩니다.');
+        }).catch(error => {
+            console.error(error);
+            setHolidayYears(current => ({ ...current, [selectedYear]: { holidays: [], available: false } }));
+            setHolidayWarning('공휴일 정보를 불러오지 못했습니다. Apps Script 배포와 캘린더 권한을 확인해주세요.');
+        });
+    }, [selectedYear, holidayYears]);
 
     const loadBookings = async () => {
         if (!selectedRoom) return;
@@ -66,6 +88,7 @@ export function Dashboard() {
     }, [user, userPhoneNumber]);
 
     const handleSlotClick = (hour: number) => {
+        if (!holidayYearLoaded) return;
         const booking = getSlotBooking(hour);
         if (booking) {
             if (user?.role === 'admin') {
@@ -106,6 +129,8 @@ export function Dashboard() {
 
     const handleBooking = async () => {
         if (selectedSlots.length === 0 || !user || !selectedRoom) return;
+        if (!holidayYearLoaded) { alert('공휴일 정보를 확인하고 있습니다. 잠시 후 다시 시도해주세요.'); return; }
+        if (isClosedHoliday) { alert(`${selectedHoliday?.name || '명절 연휴'}은 휴관일이라 예약할 수 없습니다.`); return; }
         setLoading(true);
         try {
             const isDailyUser = user.id.toLowerCase() === 'daily' || user.id === '데일리' || user.name?.includes('데일리');
@@ -208,6 +233,13 @@ export function Dashboard() {
                 </div>
             </div>
 
+            {selectedHoliday && (
+                <div className={`rounded-xl border px-4 py-3 text-sm font-semibold ${isClosedHoliday ? 'border-red-200 bg-red-50 text-red-700' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+                    {selectedHoliday.name} · {isClosedHoliday ? '센터 휴관일로 예약할 수 없습니다.' : '공휴일 운영시간은 10:00~17:00입니다.'}
+                </div>
+            )}
+            {holidayWarning && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{holidayWarning}</div>}
+
             <div className="flex space-x-1 bg-gray-100 p-1 rounded-xl overflow-x-auto">
                 {rooms.map(room => (
                     <button key={room.id} onClick={() => setSelectedRoom(room)}
@@ -257,7 +289,11 @@ export function Dashboard() {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2 sm:gap-3">
+                {!holidayYearLoaded ? (
+                    <div className="rounded-xl bg-gray-50 py-14 text-center"><div className="text-lg font-bold text-gray-700">공휴일 정보를 확인하는 중...</div><div className="mt-2 text-sm text-gray-500">선택한 날짜의 운영시간을 확인하고 있습니다.</div></div>
+                ) : isClosedHoliday ? (
+                    <div className="rounded-xl bg-red-50 py-14 text-center"><div className="text-lg font-bold text-red-700">명절 휴관일</div><div className="mt-2 text-sm text-red-600">{selectedHoliday?.name}에는 연습실을 운영하지 않습니다.</div></div>
+                ) : <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2 sm:gap-3">
                     {HOURS.map(hour => {
                         const booking = getSlotBooking(hour);
                         const booked = !!booking;
@@ -282,14 +318,14 @@ export function Dashboard() {
                             </button>
                         );
                     })}
-                </div>
+                </div>}
 
                 <div className="mt-8 flex justify-end items-center border-t pt-6">
                     <div className="mr-6 text-right">
                         <span className="block text-xs text-gray-500">선택된 시간</span>
                         <span className="text-xl font-bold text-brand-600">{selectedSlots.length > 0 ? `${selectedSlots.length}시간` : '-'}</span>
                     </div>
-                    <button onClick={handleBooking} disabled={selectedSlots.length === 0 || loading}
+                    <button onClick={handleBooking} disabled={selectedSlots.length === 0 || loading || !holidayYearLoaded || isClosedHoliday}
                         className="bg-brand-600 hover:bg-brand-700 disabled:bg-gray-300 text-white px-8 py-3 rounded-xl font-bold shadow-lg hover:shadow-xl transition-all disabled:shadow-none">
                         {loading ? '처리중...' : '예약 신청하기'}
                     </button>

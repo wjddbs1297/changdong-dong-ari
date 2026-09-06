@@ -1,4 +1,4 @@
-import type { Booking, User, Room, Notice, ClubMember } from '../types';
+import type { Booking, User, Room, Notice, ClubMember, HolidayInfo } from '../types';
 
 export interface BookingRequest {
     userId: string;
@@ -28,6 +28,8 @@ export interface DataService {
     getUserBookings(userId: string): Promise<Booking[]>;
     getPendingActivityReports(userId: string): Promise<Booking[]>;
     getMembers(userId: string): Promise<ClubMember[]>;
+    getHolidays(years: number[]): Promise<HolidayCalendarResult>;
+    getPerformanceData(query: PerformanceQuery): Promise<PerformanceDataResult>;
     submitActivityReport(data: ActivityReportRequest): Promise<void>;
 }
 
@@ -47,6 +49,24 @@ export interface ActivityReportRequest {
     };
     participants: string[];
     signature: string;
+}
+
+export interface HolidayCalendarResult {
+    holidays: HolidayInfo[];
+    available: boolean;
+}
+
+export interface PerformanceQuery {
+    mode: 'month' | 'quarter' | 'year';
+    year: number;
+    month: number;
+    quarter: number;
+    basis: 'ended' | 'completed';
+}
+
+export interface PerformanceDataResult extends HolidayCalendarResult {
+    bookings: Booking[];
+    availableYears: number[];
 }
 
 let configCache: Config | null = null;
@@ -196,6 +216,24 @@ export class ApiDataService implements DataService {
         const response = await protectedPost(url, { method: 'GET_MEMBERS', userId });
         const json = await response.json();
         if (json.status !== 'success') throw new Error(json.message || '회원 명단을 불러오지 못했습니다.');
+        return json.data;
+    }
+
+    async getHolidays(years: number[]): Promise<HolidayCalendarResult> {
+        const url = getApiUrl();
+        if (!url) return { holidays: [], available: false };
+        const response = await protectedPost(url, { method: 'GET_HOLIDAYS', years });
+        const json = await response.json();
+        if (json.status !== 'success') throw new Error(json.message || '공휴일 정보를 불러오지 못했습니다.');
+        return json.data;
+    }
+
+    async getPerformanceData(query: PerformanceQuery): Promise<PerformanceDataResult> {
+        const url = getApiUrl();
+        if (!url) return { bookings: [], holidays: [], available: false, availableYears: [] };
+        const response = await protectedPost(url, { method: 'GET_PERFORMANCE_DATA', ...query });
+        const json = await response.json();
+        if (json.status !== 'success') throw new Error(json.message || '이용 실적을 불러오지 못했습니다.');
         return json.data;
     }
 
