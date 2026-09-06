@@ -39,16 +39,15 @@ export function AdminLogs() {
     }, [user]);
 
     const getRoomName = (roomId: string) => rooms.find(r => r.id === roomId)?.name || roomId;
+    const getClubName = (booking: Booking) => String(booking.userName || booking.userId || '').trim();
 
     const clubOptions = useMemo(() => {
-        const clubs = new Map<string, string>();
+        const clubs = new Set<string>();
         bookings.forEach(booking => {
-            const id = String(booking.userId || '').trim();
-            if (id) clubs.set(id, booking.userName || id);
+            const name = getClubName(booking);
+            if (name) clubs.add(name);
         });
-        return [...clubs.entries()]
-            .map(([id, name]) => ({ id, name }))
-            .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+        return [...clubs].sort((a, b) => a.localeCompare(b, 'ko'));
     }, [bookings]);
 
     const monthOptions = useMemo(() => {
@@ -59,7 +58,7 @@ export function AdminLogs() {
     }, [bookings]);
 
     const matchesSelection = (booking: Booking) => {
-            const matchesClub = clubFilter === 'all' || booking.userId === clubFilter;
+            const matchesClub = clubFilter === 'all' || getClubName(booking) === clubFilter;
             const matchesMonth = monthFilter === 'all' || booking.date.startsWith(monthFilter);
             return matchesClub && matchesMonth;
     };
@@ -113,7 +112,7 @@ export function AdminLogs() {
                         >
                             <option value="all">전체 동아리</option>
                             {clubOptions.map(club => (
-                                <option key={club.id} value={club.id}>{club.name}</option>
+                                <option key={club} value={club}>{club}</option>
                             ))}
                         </select>
                     </label>
@@ -164,12 +163,12 @@ export function AdminLogs() {
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
                                 {sortedBookings.length > 0 ? (
-                                    sortedBookings.map(b => {
+                                    sortedBookings.map((b, index) => {
                                         const hasLog = !!(b.activityContent && b.activityContent.trim());
                                         const hasSig = !!b.signature;
                                         const highlighted = (clubFilter !== 'all' || monthFilter !== 'all') && matchesSelection(b);
                                         return (
-                                            <tr key={b.id} className={`transition-colors ${highlighted ? 'bg-brand-50 ring-1 ring-inset ring-brand-100' : 'hover:bg-gray-50'}`}>
+                                            <tr key={`${b.id}-${b.date}-${b.startTime}-${b.endTime}-${b.roomId}-${b.userId}-${index}`} className={`transition-colors ${highlighted ? 'bg-brand-50 ring-1 ring-inset ring-brand-100' : 'hover:bg-gray-50'}`}>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                                     {b.date}
                                                 </td>
