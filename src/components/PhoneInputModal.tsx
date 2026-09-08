@@ -4,18 +4,20 @@ import { X } from 'lucide-react';
 interface PhoneInputModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSubmit: (phoneNumber: string) => void;
+    onSubmit: (phoneNumber: string, reserverName: string) => void;
     isLoading: boolean;
 }
 
 export function PhoneInputModal({ isOpen, onClose, onSubmit, isLoading }: PhoneInputModalProps) {
     const [phoneNumber, setPhoneNumber] = useState('');
+    const [reserverName, setReserverName] = useState('');
     const [error, setError] = useState('');
 
     if (!isOpen) return null;
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        if (!reserverName.trim()) { setError('예약자 이름을 입력해주세요.'); return; }
 
         // Basic validation: 010-XXXX-XXXX or 010XXXXXXXX
         const cleaned = phoneNumber.replace(/-/g, '').trim();
@@ -24,7 +26,7 @@ export function PhoneInputModal({ isOpen, onClose, onSubmit, isLoading }: PhoneI
             return;
         }
 
-        onSubmit(cleaned);
+        onSubmit(cleaned, reserverName.trim());
     };
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -57,6 +59,9 @@ export function PhoneInputModal({ isOpen, onClose, onSubmit, isLoading }: PhoneI
                     </div>
 
                     <form onSubmit={handleSubmit}>
+                        <label htmlFor="reserver-name" className="mb-4 block text-sm font-medium text-gray-700">이름 (필수)
+                            <input id="reserver-name" value={reserverName} onChange={e => setReserverName(e.target.value)} maxLength={50} autoComplete="name" autoFocus disabled={isLoading} required className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3" placeholder="예약자 이름" />
+                        </label>
                         <div className="mb-6">
                             <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
                                 연락처 (필수)
@@ -68,7 +73,6 @@ export function PhoneInputModal({ isOpen, onClose, onSubmit, isLoading }: PhoneI
                                 onChange={handleInputChange}
                                 placeholder="010-0000-0000"
                                 className={`w-full px-4 py-3 rounded-xl border ${error ? 'border-red-300 focus:ring-red-200' : 'border-gray-200 focus:ring-brand-200'} focus:border-brand-500 focus:ring-4 transition-all outline-none text-lg tracking-wide`}
-                                autoFocus
                                 disabled={isLoading}
                                 maxLength={13}
                             />
@@ -93,7 +97,7 @@ export function PhoneInputModal({ isOpen, onClose, onSubmit, isLoading }: PhoneI
                             </button>
                             <button
                                 type="submit"
-                                disabled={isLoading || phoneNumber.length < 12} // simple check for length (010-xxxx-xxxx is 13 chars usually, strict check in handler)
+                                disabled={isLoading || !reserverName.trim() || phoneNumber.length < 12}
                                 className="flex-1 px-4 py-3 text-white bg-brand-600 hover:bg-brand-700 rounded-xl font-semibold shadow-lg shadow-brand-200 transition-all disabled:opacity-50 disabled:shadow-none"
                             >
                                 {isLoading ? '처리중...' : '확인'}

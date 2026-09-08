@@ -22,6 +22,7 @@ export function Dashboard() {
     const [loading, setLoading] = useState(false);
     const [isPhoneModalOpen, setIsPhoneModalOpen] = useState(false);
     const [userPhoneNumber, setUserPhoneNumber] = useState<string>('');
+    const [reserverName, setReserverName] = useState('');
     const [isHeadcountModalOpen, setIsHeadcountModalOpen] = useState(false);
     const [pendingPhoneNumber, setPendingPhoneNumber] = useState<string | undefined>(undefined);
     const [holidayYears, setHolidayYears] = useState<Record<number, HolidayCalendarResult>>({});
@@ -151,7 +152,8 @@ export function Dashboard() {
         }
     };
 
-    const handlePhoneSubmit = (phoneNumber: string) => {
+    const handlePhoneSubmit = (phoneNumber: string, name: string) => {
+        setReserverName(name);
         setUserPhoneNumber(phoneNumber);
         setPendingPhoneNumber(phoneNumber);
         setIsPhoneModalOpen(false);
@@ -169,6 +171,7 @@ export function Dashboard() {
                 userId: user.id, roomId: selectedRoom.id,
                 date: dateStr, startTime, duration,
                 phoneNumber: pendingPhoneNumber,
+                reserverName: pendingPhoneNumber ? reserverName : undefined,
                 expectedHeadcount,
             });
             const isDailyUser = user.id.toLowerCase() === 'daily' || user.id === '데일리' || user.name?.includes('데일리');

@@ -22,6 +22,7 @@ export interface Booking {
     endTime: string; // HH:00
     createdAt: string;
     phoneNumber?: string;
+    reserverName?: string;
     activityContent?: string;
     suggestion?: string;
     headcount?: {

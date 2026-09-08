@@ -145,6 +145,7 @@ export function MyReservations() {
                             </h3>
 
                             <div className="space-y-2 text-sm text-gray-600">
+                                {['daily', '데일리'].includes(booking.userId.trim().toLowerCase()) && <div className="rounded-lg bg-gray-50 p-3 break-words"><div>예약자: {booking.reserverName || '이름 미등록'}</div><div className="mt-1">연락처: {(booking.phoneNumber || '').replace(/^(010)(\d{4})(\d{4})$/, '$1-$2-$3') || '연락처 미등록'}</div></div>}
                                 <div className="flex items-center space-x-2">
                                     <Calendar size={16} className="text-gray-400" />
                                     <span>{booking.date}</span>
@@ -164,6 +165,7 @@ export function MyReservations() {
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
                     <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl animate-fade-in">
                         <h3 className="text-xl font-bold mb-4 text-gray-900">예약 수정</h3>
+                        {(editingBooking.reserverName || editingBooking.phoneNumber) && <p className="mb-4 break-words text-sm text-gray-600">예약자: {editingBooking.reserverName || '이름 미등록'} · {editingBooking.phoneNumber}</p>}
                         <form onSubmit={handleUpdate} className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">날짜</label>

@@ -7,6 +7,7 @@ export interface BookingRequest {
     startTime: string;
     duration: number;
     phoneNumber?: string;
+    reserverName?: string;
     expectedHeadcount: number;
 }
 
@@ -186,6 +187,7 @@ export class ApiDataService implements DataService {
             startTime:       request.startTime,
             duration:        request.duration,
             phoneNumber:     request.phoneNumber     ?? "",
+            reserverName:    request.reserverName    ?? "",
             expectedHeadcount: request.expectedHeadcount,
         };
 
