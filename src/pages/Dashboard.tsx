@@ -118,7 +118,8 @@ export function Dashboard() {
             setSelectedSlots(selectedSlots.filter(h => h !== hour));
         } else {
             const newSlots = [...selectedSlots, hour].sort((a, b) => a - b);
-            if (newSlots.length > 3 && user?.role !== 'admin') { alert('최대 3시간까지만 선택 가능합니다.'); return; }
+            const isDaily = ['daily', '데일리'].includes(user?.id.trim().toLowerCase() || '');
+            if (newSlots.length > 3 && user?.role !== 'admin' && !isDaily) { alert('최대 3시간까지만 선택 가능합니다.'); return; }
             let isContiguous = true;
             for (let i = 0; i < newSlots.length - 1; i++) {
                 if (newSlots[i + 1] !== newSlots[i] + 1) isContiguous = false;

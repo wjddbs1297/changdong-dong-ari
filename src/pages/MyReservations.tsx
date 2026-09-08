@@ -198,7 +198,7 @@ export function MyReservations() {
                                         onChange={e => setEditForm({ ...editForm, duration: e.target.value })}
                                         className="w-full border rounded-lg p-2"
                                     >
-                                        {[1, 2, 3].map(h => (
+                                        {Array.from({ length: user?.role === 'admin' || ['daily', '데일리'].includes(user?.id.trim().toLowerCase() || '') ? 12 : 3 }, (_, i) => i + 1).map(h => (
                                             <option key={h} value={h}>{h}시간</option>
                                         ))}
                                     </select>
