@@ -25,7 +25,7 @@ export function Layout({ children }: LayoutProps) {
         <div className="min-h-screen bg-gray-50 font-sans text-gray-900">
             {/* Header */}
             <header className="bg-white border-b border-gray-200 sticky top-0 z-50 w-full">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-3">
                     <Link to="/" className="flex items-center space-x-2">
                         <div className="bg-brand-600 p-2 rounded-lg text-white">
                             <Music size={24} />
@@ -35,7 +35,7 @@ export function Layout({ children }: LayoutProps) {
                         </span>
                     </Link>
 
-                    <nav className="flex items-center space-x-2 sm:space-x-6">
+                    <nav aria-label="주 메뉴" className="flex w-full flex-wrap items-center gap-x-2 gap-y-3 text-sm xl:w-auto [&_a]:min-h-10 [&_a]:inline-flex [&_a]:items-center [&_button]:min-h-10">
                         {user ? (
                             <>
                                 <Link
@@ -94,7 +94,7 @@ export function Layout({ children }: LayoutProps) {
             </header>
 
             {/* Main Content */}
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
+            <main className="w-full min-w-0 max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 animate-fade-in">
                 {children}
             </main>
             <PendingActivityReports />

@@ -206,14 +206,14 @@ export function AdminStats() {
 
     return (
         <div className="space-y-6">
-            <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+            <section className="min-w-0 rounded-2xl border border-gray-100 bg-white p-4 sm:p-6 shadow-sm">
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                     <div>
                         <div className="mb-2 flex items-center gap-2 text-brand-700"><BarChart3 size={22} /><span className="text-sm font-bold">관리자 전용</span></div>
                         <h1 className="text-2xl font-bold text-gray-900">동아리 이용 실적</h1>
                         <p className="mt-2 text-sm text-gray-500">{periodLabel(mode, year, month, quarter, selectedWeek.start, selectedWeek.end)} 종료 예약을 시간대별로 집계합니다.</p>
                     </div>
-                    <div className="flex flex-wrap items-end gap-3">
+                    <div className="grid min-w-0 grid-cols-2 items-end gap-3 sm:flex sm:flex-wrap [&_label]:min-w-0 [&_select]:w-full [&_select]:min-w-0 [&_select]:min-h-11">
                         <label className="text-xs font-semibold text-gray-500">기간 단위
                             <select value={mode} onChange={e => { setMode(e.target.value as PeriodMode); setSelected(null); }} className="mt-1 block rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900">
                                 <option value="week">주별</option><option value="month">월별</option><option value="quarter">분기별</option><option value="year">연도별</option>
@@ -224,8 +224,8 @@ export function AdminStats() {
                                 {years.map(item => <option key={item} value={item}>{item}년</option>)}
                             </select>
                         </label>}
-                        {mode === 'week' && <div className="text-xs font-semibold text-gray-500">기준일
-                            <div className="mt-1 flex items-center gap-1">
+                        {mode === 'week' && <div className="col-span-2 min-w-0 text-xs font-semibold text-gray-500">기준일
+                            <div className="mt-1 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1 [&_button]:whitespace-nowrap [&_button]:min-h-11 [&_input]:w-full [&_input]:min-w-0 [&_input]:min-h-11">
                                 <button type="button" onClick={() => { setWeekDate(value => moveWeek(value, -1)); setSelected(null); }} className="rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-sm text-gray-600 hover:bg-gray-50">이전 주</button>
                                 <input type="date" value={weekDate} onChange={e => { setWeekDate(e.target.value); setSelected(null); }} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-normal text-gray-900" />
                                 <button type="button" onClick={() => { setWeekDate(value => moveWeek(value, 1)); setSelected(null); }} className="rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-sm text-gray-600 hover:bg-gray-50">다음 주</button>
@@ -252,7 +252,7 @@ export function AdminStats() {
                 {loadError && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{loadError}</div>}
             </section>
 
-            <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <section className="grid grid-cols-2 gap-2 sm:gap-4 xl:grid-cols-4">
                 <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"><CalendarDays className="mb-3 text-brand-600" size={22} /><div className="text-sm text-gray-500">이용 동아리</div><div className="mt-1 text-2xl font-bold">{totals.clubs}개</div></div>
                 <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"><BarChart3 className="mb-3 text-brand-600" size={22} /><div className="text-sm text-gray-500">총 이용 횟수</div><div className="mt-1 text-2xl font-bold">{totals.visits}회</div></div>
                 <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"><Clock3 className="mb-3 text-brand-600" size={22} /><div className="text-sm text-gray-500">총 이용 시간</div><div className="mt-1 text-2xl font-bold">{totals.hours}시간</div></div>
@@ -262,7 +262,8 @@ export function AdminStats() {
             <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
                 <div className="border-b border-gray-100 px-6 py-4 text-sm text-gray-500">오전은 시작 시각이 13:00 이전인 예약입니다. 공휴일은 일요일을 포함하며 토요일과 겹치면 공휴일로 집계합니다. 남녀 인원은 제출된 활동일지의 실제 인원만 합산합니다.</div>
                 {loading ? <div className="py-16 text-center text-gray-500">데이터를 불러오는 중...</div> : (
-                    <div className="overflow-x-auto">
+                    <div className="max-w-full overflow-x-auto" role="region" aria-label="동아리 실적 표, 좌우로 스크롤" tabIndex={0}>
+                        <p className="px-4 py-2 text-xs text-brand-700 sm:hidden">표를 좌우로 밀어 시간대별 실적과 남녀 인원을 확인하세요.</p>
                         <table className="min-w-[1040px] w-full border-collapse text-sm">
                             <thead>
                                 <tr className="border-b border-gray-200 bg-gray-50">
@@ -296,13 +297,13 @@ export function AdminStats() {
                 )}
             </section>
 
-            {selected && <section className="rounded-2xl border border-brand-100 bg-white p-6 shadow-sm">
+            {selected && <section className="min-w-0 rounded-2xl border border-brand-100 bg-white p-4 sm:p-6 shadow-sm">
                 <div className="flex items-start justify-between gap-4"><div><h2 className="text-lg font-bold text-gray-900">{selected.row.name} · {selected.label}</h2><p className="mt-1 text-sm text-gray-500">{periodLabel(mode, year, month, quarter, selectedWeek.start, selectedWeek.end)} 이용 내역</p></div><button onClick={() => setSelected(null)} className="rounded-lg px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100">닫기</button></div>
                 <div className="mt-4 divide-y divide-gray-100 rounded-xl border border-gray-100">
                     {[...selected.row.cells[selected.key].visits].sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime)).map(booking => {
                         const genderCounts = bookingGenderCounts(booking);
                         const participantText = isCompleted(booking) ? `남 ${genderCounts.male}명 · 여 ${genderCounts.female}명 · 총 ${genderCounts.male + genderCounts.female}명` : '활동일지 미작성';
-                        return <div key={booking.id} className="grid gap-1 px-4 py-3 sm:grid-cols-[120px_160px_1fr_220px]">
+                        return <div key={booking.id} className="grid gap-1 px-4 py-3 sm:grid-cols-2 lg:grid-cols-[120px_160px_1fr_220px]">
                             <div className="font-semibold text-gray-900">{booking.date}</div><div className="text-gray-600">{booking.startTime} ~ {booking.endTime}</div><div className="text-gray-500">{roomNames.get(booking.roomId) || booking.roomId}{holidayNames.get(booking.date) ? ` · ${holidayNames.get(booking.date)}` : ''}</div><div className="text-gray-600">{participantText}</div>
                         </div>;
                     })}

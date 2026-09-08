@@ -149,7 +149,7 @@ export function AdminLogs() {
 
     return (
         <div className="space-y-6">
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <div className="min-w-0 bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-6">
                 <h1 className="text-2xl font-bold text-gray-900">전체 활동일지 대장</h1>
 
                 <div className="mt-5 mb-6 flex flex-col gap-3 rounded-xl border border-gray-100 bg-gray-50 p-4 sm:flex-row sm:items-end">
@@ -199,7 +199,8 @@ export function AdminLogs() {
                 {loading ? (
                     <div className="text-center text-gray-500 py-10">데이터를 불러오는 중...</div>
                 ) : (
-                    <div className="overflow-x-auto">
+                    <div className="max-w-full overflow-x-auto" role="region" aria-label="활동일지 표, 좌우로 스크롤" tabIndex={0}>
+                        <p className="py-2 text-xs text-brand-700 sm:hidden">표를 좌우로 밀면 인쇄·PDF 저장 버튼을 확인할 수 있습니다.</p>
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
                                 <tr>
